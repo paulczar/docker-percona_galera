@@ -71,7 +71,13 @@ until confd -onetime -node $ETCD -config-file /app/confd.toml; do
   sleep $(($ETCD_TTL/2))  # sleep for half the TTL
 done
 
-CLUSTER_MEMBERS=$(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints | awk -F/ '{print $6}' | xargs | sed 's/ /,/')
+for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
+  value=$(etcdctl --no-sync -C $ETCD get $key)
+  echo $key:$value
+  LIST+="$(basename $value),"
+done
+
+CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
 
 # run the service in the background
 #service mysql start
