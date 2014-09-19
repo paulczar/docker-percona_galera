@@ -15,6 +15,15 @@ export ETCD="$HOST:$ETCD_PORT"
 export ETCD_PATH=${ETCD_PATH:-/database}
 export ETCD_TTL=${ETCD_TTL:-10}
 
+# wait for etcd to be available
+until etcdctl --no-sync -C $ETCD ls >/dev/null 2>&1; do
+  echo "waiting for etcd at $ETCD..."
+  sleep $(($ETCD_TTL/2))  # sleep for half the TTL
+done
+
+# wait until etcd has discarded potentially stale values
+sleep $(($ETCD_TTL+1))
+
 # initialize data volume
 chown -R mysql:mysql /var/lib/mysql
 if [[ ! -d /var/lib/mysql/mysql ]]; then
@@ -25,15 +34,6 @@ if [[ ! -d /var/lib/mysql/mysql ]]; then
 else
   echo "=> Using an existing database"
 fi
-
-# wait for etcd to be available
-until etcdctl --no-sync -C $ETCD ls >/dev/null 2>&1; do
-  echo "waiting for etcd at $ETCD..."
-  sleep $(($ETCD_TTL/2))  # sleep for half the TTL
-done
-
-# wait until etcd has discarded potentially stale values
-sleep $(($ETCD_TTL+1))
 
 function etcd_set_default {
   etcdctl --no-sync -C $ETCD mk $ETCD_PATH/$1 $2 >/dev/null 2>&1 || true

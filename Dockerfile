@@ -3,22 +3,24 @@
 # Author: Paul Czarkowski
 # Date: 08/16/2014
 
-FROM ubuntu:12.04
+FROM ubuntu:14.04
 MAINTAINER Paul Czarkowski "paul@paulcz.net"
 
 # Base Deps
-RUN apt-get update && apt-get install -yq \
-    make \
-    ca-certificates \
-    net-tools \
-    sudo \
-    wget \
-    vim \
-    strace \
-    lsof \
-    netcat \
-    lsb-release \
-    --no-install-recommends
+RUN \
+  apt-get update && apt-get install -yq \
+  make \
+  ca-certificates \
+  net-tools \
+  sudo \
+  wget \
+  vim \
+  strace \
+  lsof \
+  netcat \
+  lsb-release \
+  socat \
+  --no-install-recommends
 
 # generate a local to suppress warnings
 RUN locale-gen en_US.UTF-8
@@ -31,13 +33,6 @@ RUN \
   apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get install -y percona-xtradb-cluster-client-5.6 percona-xtradb-cluster-server-5.6  percona-xtrabackup rsync percona-xtradb-cluster-garbd-3.x haproxy && \
   sed -i 's/^\(bind-address\s.*\)/# \1/' /etc/mysql/my.cnf
-
-#RUN \
-#  echo "mysqld_safe &" > /tmp/config && \
-#  echo "sleep 5" >> /tmp/config && \
-#  echo "mysql -e 'GRANT ALL PRIVILEGES ON *.* TO \"root\"@\"%\";'" >> /tmp/config && \
-#  bash /tmp/config && \
-#  rm -f /tmp/config
 
 RUN rm -rf /var/lib/mysql/*
 

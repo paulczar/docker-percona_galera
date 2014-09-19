@@ -23,13 +23,12 @@ coreos:
         BindIPv6Only=both
         [Install]
         WantedBy=sockets.target
-    - name: docker-database.service
+    - name: database.service
       command: start
       enable: true
       content: |
         [Unit]
         Description=database
-        Author=Paul Czarkowski
         After=docker.service
         [Service]
         Restart=always
