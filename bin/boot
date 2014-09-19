@@ -9,11 +9,47 @@ set -eo pipefail
 # set debug based on envvar
 [[ $DEBUG ]] && set -x
 
+# functions
+
+function etcd_set_default {
+  etcdctl --no-sync -C $ETCD mk $ETCD_PATH/$1 $2 >/dev/null 2>&1 || true
+}
+
+function etcd_make_directory {
+  etcdctl --no-sync -C $ETCD setdir $ETCD_PATH/$1 >/dev/null 2>&1 || true
+}
+
+function on_exit() {
+    kill -TERM $SERVICE_PID
+    wait $SERVICE_PID 2>/dev/null
+    exit 0
+}
+
+function cluster_members() {
+  for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
+    value=$(etcdctl --no-sync -C $ETCD get $key)
+    echo $key:$value
+    LIST+="$(basename $value),"
+  done
+  CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
+}
+
+function publish_to_etcd() {
+  if [[ -z $CLUSTER ]]; then
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/host $HOST --ttl $ETCD_TTL >/dev/null
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/port $PUBLISH --ttl $ETCD_TTL >/dev/null
+  else
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/galeraEndpoints/$HOSTNAME $HOST:4567 --ttl $ETCD_TTL >/dev/null
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $ETCD_TTL >/dev/null
+  fi
+}
+
 # configure etcd
 export ETCD_PORT=${ETCD_PORT:-4001}
 export ETCD="$HOST:$ETCD_PORT"
 export ETCD_PATH=${ETCD_PATH:-/database}
 export ETCD_TTL=${ETCD_TTL:-10}
+export ETCD_OPTIONS="--no-sync -C $ETCD"
 
 # wait for etcd to be available
 until etcdctl --no-sync -C $ETCD ls >/dev/null 2>&1; do
@@ -35,19 +71,11 @@ else
   echo "=> Using an existing database"
 fi
 
-function etcd_set_default {
-  etcdctl --no-sync -C $ETCD mk $ETCD_PATH/$1 $2 >/dev/null 2>&1 || true
-}
-
-function etcd_make_directory {
-  etcdctl --no-sync -C $ETCD setdir $ETCD_PATH/$1 >/dev/null 2>&1 || true
-}
-
 MYSQL_USER=${MYSQL_USER:-admin}
 MYSQL_PASS=${MYSQL_PASS:-admin}
 REP_USER=${REP_USER:-replicator}
 REP_PASS=${REP_PASS:-replicator}
-
+BOOTSTRAP=0
 PORT=${PUBLISH:-3306}
 PROTO=${PROTO:-tcp}
 
@@ -71,17 +99,6 @@ until confd -onetime -node $ETCD -config-file /app/confd.toml; do
   sleep $(($ETCD_TTL/2))  # sleep for half the TTL
 done
 
-[[ $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints) ]] || sleep $(( ( RANDOM % 60 )  + 1 ))
-
-
-for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
-  value=$(etcdctl --no-sync -C $ETCD get $key)
-  echo $key:$value
-  LIST+="$(basename $value),"
-done
-
-CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
-
 echo starting mysql in order to set up passwords
 
 mysqld_safe --skip-syslog --verbose &
@@ -96,22 +113,33 @@ mysqladmin shutdown
 WSREP_OPTIONS="--wsrep_node_address=$HOST --skip-syslog --verbose"
 
 echo Starting MySQL for reals
-if [[ -z $CLUSTER_MEMBERS ]]; then
-  mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS &
+
+cluster_members
+
+if [[ -z $CLUSTER_MEMBERS ]]; then 
+  # Perform Election
+  $ELECTION_PATH=$ETCD_PATH/election
+  etcdctl $ETCD_OPTIONS ls $ETCD_PATH/election || etcdctl $ETCD_OPTIONS mkdir $ELECTION_PATH
+  if etcdctl $ETCD_OPTIONS mk $ELECTION_PATH/bootstrap $HOSTNAME >/dev/null 2>&1; then
+    BOOTSTRAP=1
+    mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS &
+  else
+    until etcdctl $ETCD_OPTIONS get $ETCD_PATH/election/ready >/dev/null 2>&1; do
+      echo "waiting on bootstrap..."
+      sleep 20
+    done
+    mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
+  fi
 else
   mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
 fi
+
 
 SERVICE_PID=$!
 
 echo $SERVICE_PID > /app/database.pid
 
 # smart shutdown on SIGINT and SIGTERM
-function on_exit() {
-    kill -TERM $SERVICE_PID
-    wait $SERVICE_PID 2>/dev/null
-    exit 0
-}
 trap on_exit INT TERM
 
 # spawn confd in the background to update services based on etcd changes
@@ -125,6 +153,11 @@ while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$
 
 echo database running...
 
+if [[ ! -z $BOOTSTRAP ]]; then
+  publish_to_etcd
+  etcdctl $ETCD_OPTIONS set $ELECTION_PATH/ready true --ttl 300 >/dev/null
+fi
+
 # publish the service to etcd using the injected HOST and PORT
 if [[ ! -z $PUBLISH ]]; then
 
@@ -135,13 +168,7 @@ if [[ ! -z $PUBLISH ]]; then
 
   # while the port is listening, publish to etcd
   while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
-    if [[ -z $CLUSTER ]]; then
-      etcdctl --no-sync -C $ETCD set $ETCD_PATH/host $HOST --ttl $ETCD_TTL >/dev/null
-      etcdctl --no-sync -C $ETCD set $ETCD_PATH/port $PUBLISH --ttl $ETCD_TTL >/dev/null
-    else
-      etcdctl --no-sync -C $ETCD set $ETCD_PATH/cluster/galeraEndpoints/$HOSTNAME $HOST:4567 --ttl $ETCD_TTL >/dev/null
-      etcdctl --no-sync -C $ETCD set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $ETCD_TTL >/dev/null
-    fi
+    publish_to_etcd
     sleep $(($ETCD_TTL/2)) # sleep for half the TTL
   done
 
