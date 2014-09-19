@@ -11,6 +11,10 @@ Local Demo
 
 ```console
 $ vagrant up
+$ ssh coreos-01
+$ database
+root@e9682b05cf5e:/# mysql -e "show status like 'wsrep_cluster%'"
+
 ```
 
 

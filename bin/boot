@@ -71,6 +71,9 @@ until confd -onetime -node $ETCD -config-file /app/confd.toml; do
   sleep $(($ETCD_TTL/2))  # sleep for half the TTL
 done
 
+[[ $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints) ]] || sleep $(( ( RANDOM % 60 )  + 1 ))
+
+
 for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
   value=$(etcdctl --no-sync -C $ETCD get $key)
   echo $key:$value
@@ -78,12 +81,6 @@ for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); 
 done
 
 CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
-
-# run the service in the background
-#service mysql start
-
-WSREP_OPTIONS="--wsrep_node_address=$HOST --skip-syslog --verbose"
-#WSREP_OPTIONS="--verbose --skip-syslog"
 
 echo starting mysql in order to set up passwords
 
@@ -95,6 +92,8 @@ while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$
 
 echo stopping mysql after setting up passwords
 mysqladmin shutdown
+
+WSREP_OPTIONS="--wsrep_node_address=$HOST --skip-syslog --verbose"
 
 echo Starting MySQL for reals
 if [[ -z $CLUSTER_MEMBERS ]]; then
