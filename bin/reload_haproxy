@@ -1,0 +1,3 @@
+#!/bin/bash
+
+[[ -e /app/haproxy.pid ]] && haproxy -f /etc/haproxy/haproxy.cfg -p /app/haproxy.pid -V -D -sf `cat /app/haproxy.pid`

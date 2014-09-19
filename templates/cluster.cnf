@@ -1,0 +1,23 @@
+[mysqld]
+query_cache_size=0
+binlog_format=ROW
+default-storage-engine=innodb
+innodb_autoinc_lock_mode=2
+query_cache_type=0
+bind-address=0.0.0.0
+
+# Galera Provider Configuration
+wsrep_provider=/usr/lib/libgalera_smm.so
+wsrep_slave_threads=2
+
+# Galera Cluster Configuration
+wsrep_cluster_name="{{ .database_cluster_name }}"
+wsrep_cluster_address="gcomm://"
+
+# Galera Synchronization Congifuration
+wsrep_sst_auth={{ .database_credentials_repUser }}:{{ .database_credentials_repPass }}
+wsrep_certify_nonPK=1
+wsrep_convert_LOCK_to_trx=0
+wsrep_auto_increment_control=1
+wsrep_causal_reads=0
+wsrep_sst_method=xtrabackup

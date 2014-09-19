@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# Grant various credentials to mysql before joining cluster
+#
+
+mysql -e 'SET wsrep_on=OFF; GRANT select ON *.* TO "haproxy_check"@"%"'
+mysql -e 'SET wsrep_on=OFF; GRANT ALL ON *.* TO "{{ ._database_credentials_repUser }}"@"%" IDENTIFIED BY "{{ ._database_credentials_repPass }}";'
+mysql -e 'SET wsrep_on=OFF; GRANT ALL ON *.* TO "{{ ._database_credentials_repUser }}"@"localhost" IDENTIFIED BY "{{ ._database_credentials_repPass }}";'
+mysql -e 'SET wsrep_on=OFF; GRANT ALL PRIVILEGES ON *.* TO "{{ ._database_credentials_adminUser }}"@"%" IDENTIFIED BY "{{ ._database_credentials_adminPass }}";'
+mysql -e 'SET wsrep_on=OFF; GRANT SUPER ON *.* TO "{{ ._database_credentials_adminUser }}"@"%" WITH GRANT OPTION;'
+mysql -e 'FLUSH PRIVILEGES;'
+
+exit 0
