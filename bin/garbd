@@ -53,7 +53,7 @@ etcd_make_directory cluster/galeraEndpoints
 
 # I don't want to be the first guy in the cluster.
 while [[ -z $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints | awk -F/ '{print $6}' | xargs | sed 's/ /,/') ]]
-do 
+do
   echo "waiting for other nodes"
   sleep 10
 done

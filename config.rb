@@ -39,7 +39,7 @@ def write_user_data(num_instances)
     else
       @etcd_discovery = "discovery: #{Net::HTTP.get(URI.parse('http://discovery.etcd.io/new'))}"
     end
-    if ENV['dev'] 
+    if ENV['dev']
         @command = 'stop'
         @debug = 1
     else

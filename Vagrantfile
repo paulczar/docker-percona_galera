@@ -23,7 +23,7 @@ require_relative CONFIG if File.exist?(CONFIG)
 
 if ARGV.include? 'up'
   puts 'rewriting userdata'
-  write_user_data($num_instances) 
+  write_user_data($num_instances)
 end
 
 Vagrant.configure('2') do |config|
@@ -80,7 +80,7 @@ Vagrant.configure('2') do |config|
       if ENV['dev']
         c.vm.synced_folder '.', '/home/core/share', id: 'core', nfs: true, mount_options: ['nolock,vers=3,udp']
       end
-      
+
       if File.exist?(CLOUD_CONFIG_PATH)
         c.vm.provision :file, source: "#{CLOUD_CONFIG_PATH}", destination: '/tmp/vagrantfile-user-data'
         c.vm.provision :shell, inline: 'mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/', privileged: true

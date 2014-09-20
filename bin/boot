@@ -60,7 +60,7 @@ cluster_members
 
 echo Starting MySQL for reals
 
-if [[ -z $CLUSTER_MEMBERS ]]; then 
+if [[ -z $CLUSTER_MEMBERS ]]; then
   # Perform Election
   echo "==> Performing Election..."
   etcdctl $ETCD_OPTIONS ls $ETCD_PATH/election >/dev/null 2>&1 || etcdctl $ETCD_OPTIONS mkdir $ETCD_PATH/election >/dev/null 2>&1

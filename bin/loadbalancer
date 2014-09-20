@@ -39,7 +39,7 @@ function etcd_set {
 PORT=${PUBLISH:-3307}
 PROTO=${PROTO:-tcp}
 
-etcd_set port $PORT  
+etcd_set port $PORT
 etcd_set host $HOST
 
 # wait for confd to run once and install initial templates
