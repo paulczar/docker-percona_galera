@@ -77,19 +77,18 @@ Vagrant.configure('2') do |config|
       ip = "172.17.8.#{i + 100}"
       c.vm.network :private_network, ip: ip
 
-      # Uncomment below to enable NFS for sharing the host machine into the coreos-vagrant VM.
-      # c.vm.synced_folder '.', '/home/core/share', id: 'core', nfs: true, mount_options: ['nolock,vers=3,udp']
-
+      if ENV['dev']
+        c.vm.synced_folder '.', '/home/core/share', id: 'core', nfs: true, mount_options: ['nolock,vers=3,udp']
+      end
+      
       if File.exist?(CLOUD_CONFIG_PATH)
         c.vm.provision :file, source: "#{CLOUD_CONFIG_PATH}", destination: '/tmp/vagrantfile-user-data'
         c.vm.provision :shell, inline: 'mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/', privileged: true
-        #c.vm.provision :shell, inline: 'fleetctl load share/*/systemd/*'
-        #c.vm.provision :shell, inline: 'docker run --rm -v /tmp:/target jpetazzo/nsenter'
-        #c.vm.provision :shell, inline: 'docker pull dockenstack/base'
-        #c.vm.provision :shell, inline: 'fleetctl start openstack-database-data'
-        #c.vm.provision :shell, inline: 'fleetctl start openstack-glance-data'
-        #c.vm.provision :shell, inline: 'sleep 10 && fleetctl start openstack-database'
-        #c.vm.provision :shell, inline: 'fleetctl list-units'
+
+      end
+
+      if ENV['dev']
+        c.vm.provision :shell, inline: 'docker build -t paulczar/percona-galera /home/core/share'
       end
     end
   end

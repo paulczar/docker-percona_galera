@@ -3,7 +3,7 @@
 # Author: Paul Czarkowski
 # Date: 08/16/2014
 
-FROM ubuntu:14.04
+FROM ubuntu:trusty
 MAINTAINER Paul Czarkowski "paul@paulcz.net"
 
 # Base Deps
@@ -19,6 +19,7 @@ RUN \
   lsof \
   netcat \
   lsb-release \
+  locales \
   socat \
   --no-install-recommends
 

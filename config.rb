@@ -7,6 +7,8 @@
 # Size of the CoreOS cluster created by Vagrant
 $num_instances=3
 
+# Developer mode?
+
 # Log the serial consoles of CoreOS VMs to log/
 # Enable by setting value to true, disable with false
 # WARNING: Serial logging is known to result in extremely high CPU usage with
@@ -36,6 +38,13 @@ def write_user_data(num_instances)
       @etcd_discovery = '# single node no discovery needed.'
     else
       @etcd_discovery = "discovery: #{Net::HTTP.get(URI.parse('http://discovery.etcd.io/new'))}"
+    end
+    if ENV['dev'] 
+        @command = 'stop'
+        @debug = 1
+    else
+        @command = 'start'
+        @debug = 0
     end
     template = File.join(File.dirname(__FILE__), 'user-data.erb')
     target = File.join(File.dirname(__FILE__), 'user-data')

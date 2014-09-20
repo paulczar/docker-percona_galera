@@ -1,0 +1,78 @@
+#!/bin/bash
+
+function etcd_set_default {
+  etcdctl --no-sync -C $ETCD mk $ETCD_PATH/$1 $2 >/dev/null 2>&1 || true
+}
+
+function etcd_make_directory {
+  etcdctl --no-sync -C $ETCD setdir $ETCD_PATH/$1 >/dev/null 2>&1 || true
+}
+
+function on_exit() {
+    kill -TERM $SERVICE_PID
+    wait $SERVICE_PID 2>/dev/null
+    exit 0
+}
+
+function cluster_members() {
+  for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
+    value=$(etcdctl --no-sync -C $ETCD get $key)
+    LIST+="$(basename $value),"
+  done
+  CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
+}
+
+function publish_to_etcd() {
+  if [[ -z $CLUSTER ]]; then
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/host $HOST --ttl $ETCD_TTL >/dev/null
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/port $PUBLISH --ttl $ETCD_TTL >/dev/null
+  else
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/galeraEndpoints/$HOSTNAME $HOST:4567 --ttl $ETCD_TTL >/dev/null
+    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $ETCD_TTL >/dev/null
+  fi
+}
+
+function init_database() {
+  DB_OPTIONS="--skip-syslog --verbose"
+  chown -R mysql:mysql /var/lib/mysql
+  if [[ ! -d /var/lib/mysql/mysql ]]; then
+    echo "==> An empty or uninitialized database is detected in /var/lib/mysql"
+    echo "-----> Creating database..."
+    mysql_install_db > /dev/null 2>&1
+    echo "-----> Done!"
+  else
+    echo "-----> Using an existing database"
+  fi
+  echo "==> starting mysql in order to set up passwords"
+  mysqld_safe --skip-syslog --verbose &
+  echo "-----> sleeping for 20 seconds, then testing if DB is up"
+  sleep 20
+  while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+  [[ -z $HOST ]] && mysql_creds || /app/bin/database_creds
+  echo "==> stopping mysql after setting up passwords"
+  mysqladmin shutdown
+}
+
+function mysql_creds() {
+  mysql -e "SET wsrep_on=OFF; GRANT select ON *.* TO 'haproxy_check'@'%'"
+  mysql -e "SET wsrep_on=OFF; GRANT ALL ON *.* TO '$REP_USER'@'%' IDENTIFIED BY '$REP_PASS';"
+  mysql -e "SET wsrep_on=OFF; GRANT ALL ON *.* TO '$REP_USER'@'localhost' IDENTIFIED BY '$REP_PASS';"
+  mysql -e "SET wsrep_on=OFF; GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASS';"
+  mysql -e "SET wsrep_on=OFF; GRANT SUPER ON *.* TO '$MYSQL_USER'@'%' WITH GRANT OPTION;"
+  mysql -e 'FLUSH PRIVILEGES;'
+}
+
+function configure_etcd() {
+  export ETCD_PORT=${ETCD_PORT:-4001}
+  export ETCD="$ETCD_HOST:$ETCD_PORT"
+  export ETCD_PATH=${ETCD_PATH:-/database}
+  export ETCD_TTL=${ETCD_TTL:-10}
+  export ETCD_OPTIONS="--no-sync -C $ETCD" 
+  # wait for etcd to be available
+  until etcdctl --no-sync -C $ETCD ls >/dev/null 2>&1; do
+    echo "echo ==> waiting for etcd at $ETCD..."
+    sleep $(($ETCD_TTL/2))  # sleep for half the TTL
+  done
+  # wait until etcd has discarded potentially stale values
+  sleep $(($ETCD_TTL+1))
+}
