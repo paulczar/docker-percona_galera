@@ -118,19 +118,24 @@ cluster_members
 
 if [[ -z $CLUSTER_MEMBERS ]]; then 
   # Perform Election
-  $ELECTION_PATH=$ETCD_PATH/election
-  etcdctl $ETCD_OPTIONS ls $ETCD_PATH/election || etcdctl $ETCD_OPTIONS mkdir $ELECTION_PATH
-  if etcdctl $ETCD_OPTIONS mk $ELECTION_PATH/bootstrap $HOSTNAME >/dev/null 2>&1; then
+  echo Performing Election...
+  etcdctl $ETCD_OPTIONS ls $ETCD_PATH/election || etcdctl $ETCD_OPTIONS mkdir $ETCD_PATH/election
+  if etcdctl $ETCD_OPTIONS mk $ETCD_PATH/election/bootstrap $HOSTNAME >/dev/null 2>&1; then
+    echo Hurruh I win!
     BOOTSTRAP=1
     mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS &
   else
+    echo -n I lost election.  Waiting for leader.
     until etcdctl $ETCD_OPTIONS get $ETCD_PATH/election/ready >/dev/null 2>&1; do
-      echo "waiting on bootstrap..."
+      echo -n "."
       sleep 20
     done
+    echo leader ready.  Starting.
+    echo joining cluster with known members: $CLUSTER_MEMBERS
     mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
   fi
 else
+  echo joining cluster with known members: $CLUSTER_MEMBERS
   mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
 fi
 
@@ -155,7 +160,7 @@ echo database running...
 
 if [[ ! -z $BOOTSTRAP ]]; then
   publish_to_etcd
-  etcdctl $ETCD_OPTIONS set $ELECTION_PATH/ready true --ttl 300 >/dev/null
+  etcdctl $ETCD_OPTIONS set $ETCD_PATH/election/ready true --ttl 300 >/dev/null
 fi
 
 # publish the service to etcd using the injected HOST and PORT
