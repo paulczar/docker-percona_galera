@@ -27,7 +27,10 @@ RUN \
 RUN locale-gen en_US.UTF-8
 
 RUN \
-  apt-key adv --keyserver keys.gnupg.net --recv-keys 1C4CBDCDCD2EFD2A && \
+  apt-key adv --keyserver keys.gnupg.net --recv-keys 1C4CBDCDCD2EFD2A || \
+    apt-key adv --keyserver hkp://keys.gnupg.net:80 --recv-keys 1C4CBDCDCD2EFD2A
+
+RUN \
   echo "deb http://repo.percona.com/apt `lsb_release -cs` main" > /etc/apt/sources.list.d/percona.list && \
   echo "deb-src http://repo.percona.com/apt `lsb_release -cs` main" >> /etc/apt/sources.list.d/percona.list && \
   ln -fs /bin/true /usr/bin/chfn && \
@@ -46,7 +49,7 @@ ADD https://s3-us-west-2.amazonaws.com/opdemand/confd-v0.5.0-json /usr/local/bin
 RUN chmod +x /usr/local/bin/confd
 
 # Define mountable directories.
-VOLUME ["/etc/mysql", "/var/lib/mysql"]
+VOLUME ["/var/lib/mysql"]
 
 ADD . /app
 

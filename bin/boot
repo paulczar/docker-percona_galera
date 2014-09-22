@@ -14,6 +14,7 @@ DIR=$(dirname $0)
 # functions
 . $DIR/functions
 
+DB_OPTIONS=""
 MYSQL_USER=${MYSQL_USER:-admin}
 MYSQL_PASS=${MYSQL_PASS:-admin}
 REP_USER=${REP_USER:-replicator}
@@ -26,6 +27,8 @@ if [[ -z $HOST ]]; then
   echo '==> $HOST not set.  booting mysql without clustering.'
   init_database
   echo "==> database running..."
+  touch /var/log/mysql/error.log
+  tail -f /var/log/mysql/error.log &
   mysqld_safe $DB_OPTIONS
   exit $?
 fi
@@ -79,12 +82,12 @@ if [[ -z $CLUSTER_MEMBERS ]]; then
     echo "-----> leader ready.  Starting."
     sleep 5
     echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
-    mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
+    mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
   fi
 else
   cluster_members
   echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
-  mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
+  mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
 fi
 
 
@@ -105,6 +108,8 @@ sleep 20
 while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
 
 echo "==> database running..."
+
+tail -f /var/log/mysql/error.log &
 
 # publish the service to etcd using the injected HOST and PORT
 if [[ ! -z $PUBLISH ]]; then

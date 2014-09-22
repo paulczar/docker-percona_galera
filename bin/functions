@@ -15,6 +15,7 @@ function on_exit() {
 }
 
 function cluster_members() {
+  CLUSTER_MEMBERS=
   for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
     value=$(etcdctl --no-sync -C $ETCD get $key)
     LIST+="$(basename $value),"
@@ -33,7 +34,6 @@ function publish_to_etcd() {
 }
 
 function init_database() {
-  DB_OPTIONS="--skip-syslog --verbose"
   chown -R mysql:mysql /var/lib/mysql
   if [[ ! -d /var/lib/mysql/mysql ]]; then
     echo "==> An empty or uninitialized database is detected in /var/lib/mysql"

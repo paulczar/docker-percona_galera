@@ -23,6 +23,7 @@ coreos:
         BindIPv6Only=both
         [Install]
         WantedBy=sockets.target
+<% unless ENV['dev'] %>
     - name: database.service
       command: start
       enable: true
@@ -38,25 +39,26 @@ coreos:
         ExecStartPre=/usr/bin/docker pull paulczar/percona-galera:latest
         ExecStart=/bin/sh -c "/usr/bin/docker run --name database --rm -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera paulczar/percona-galera:latest"
         ExecStop=/usr/bin/docker stop database
-
+<% end %>
 write_files:
   - path: /etc/motd
     content: "Database Cluster Demo\n"
-  - path: /etc/profile.d/nse-function.sh
+  - path: /etc/profile.d/db-functions.sh
     permissions: '0755'
     content: |
       function nse() {
         sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" $1)
       }
-  - path: /etc/profile.d/database_shell.sh
-    permissions: '0755'
-    content: |
+      function dev_db() {
+        eval `cat /etc/environment`
+        /usr/bin/docker run -it -e DEBUG=1 -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera paulczar/percona-galera:latest bash
+      }
       function database() {
         sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" database)
       }
-  - path: /etc/profile.d/rebuild.sh
-    permissions: '0755'
-    content: |
       function rebuild() {
         docker build -t paulczar/percona-galera /home/core/share
+      }
+      function cleanup() {
+        etcdctl rm --recursive /database
       }
