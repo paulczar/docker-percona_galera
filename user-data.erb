@@ -23,23 +23,32 @@ coreos:
         BindIPv6Only=both
         [Install]
         WantedBy=sockets.target
-<% unless ENV['dev'] %>
-    - name: database.service
+    - name: database-data.service
       command: start
       enable: true
       content: |
         [Unit]
-        Description=database
+        Description=database data
         After=docker.service
-        Command=<%= @command %>
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStartPre=/usr/bin/docker pull paulczar/percona-galera:latest
+        ExecStart=/bin/sh -c "/usr/bin/docker inspect database-data >/dev/null 2>&1 || docker run --name database-data -v /var/lib/mysql paulczar/percona-galera:latest true"
+    - name: database.service
+      command: <%= @command %>
+      enable: true
+      content: |
+        [Unit]
+        Description=database
+        After=database-data.service
         [Service]
         Restart=always
         EnvironmentFile=/etc/environment
         TimeoutStartSec=20m
         ExecStartPre=/usr/bin/docker pull paulczar/percona-galera:latest
-        ExecStart=/bin/sh -c "/usr/bin/docker run --name database --rm -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera paulczar/percona-galera:latest"
+        ExecStart=/bin/sh -c "/usr/bin/docker run --name database --rm -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera --volumes-from database-data paulczar/percona-galera:latest"
         ExecStop=/usr/bin/docker stop database
-<% end %>
 write_files:
   - path: /etc/motd
     content: "Database Cluster Demo\n"
