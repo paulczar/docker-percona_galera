@@ -33,7 +33,14 @@ Deploy from Heat Template
 Deploy a three node MySQL onto Rackspace OnMetal IO flavor:
 
 ```console
-$ heat stack-create Example --template-file=contrib/rackspace/heat-vm.yaml \
+$ heat stack-create MySQL --template-file=contrib/rackspace/heat-vm.yaml \
+ -P count=3 -P etcd_discovery=$(curl -s https://discovery.etcd.io/new)
+```
+
+Deploy a three node MySQL onto Rackspace VM flavor:
+
+```console
+$ heat stack-create MySQL --template-file=contrib/rackspace/heat-onmetal-io.yaml \
  -P count=3 -P etcd_discovery=$(curl -s https://discovery.etcd.io/new)
 ```
 
@@ -42,7 +49,7 @@ Log into CoreOS
 
 ```console
 $ eval `ssh-agent`
-$ echo $(heat output-show Example private_key | sed 's/"//g') | ssh-add -
-$ export LB=$(heat output-show Example loadbalancer | sed 's/"//g') && echo $LB
+$ echo $(heat output-show MySQL private_key | sed 's/"//g') | ssh-add -
+$ export LB=$(heat output-show MySQL loadbalancer | sed 's/"//g') && echo $LB
 $ mysql -h $LB -u admin -padmin -e "show status like 'wsrep_cluster%'"
 ```

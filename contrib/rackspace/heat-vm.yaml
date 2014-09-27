@@ -48,7 +48,6 @@ parameters:
     type: string
     default: 192.168.224.0/20
 
-
 resources:
 
   ssh_key:
@@ -71,7 +70,7 @@ resources:
         type: OS::Nova::Server
         properties:
           key_name: { get_resource: ssh_key }
-          image: "513f96f3-20e4-4865-b039-d2ca3944af4e"
+          image: "CoreOS (Beta)"
           flavor: { get_param: flavor }
           name: { get_param: name }
           networks:
@@ -85,31 +84,49 @@ resources:
                 #cloud-config
                 ---
                 write_files:
-                  - path: /etc/profile.d/nse-function.sh
-                    permissions: 0755
-                    content: |
-                      function nse() {
-                        sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" $1)
-                      }
                   - path:  /etc/iptables.rules
                     permissions: 0600
                     content: |
                       *filter
-                      :INPUT DROP [0:0]
-                      :FORWARD DROP [0:0]
+                      :INPUT ACCEPT [0:0]
+                      :FORWARD ACCEPT [0:0]
                       :OUTPUT ACCEPT [0:0]
                       -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
                       -A INPUT -p tcp --dport 22 -j ACCEPT
-                      -A INPUT -p tcp --dport 3306 -j ACCEPT
                       -A INPUT -i lo -j ACCEPT
                       -A INPUT -p icmp --icmp-type echo-reply -j ACCEPT
                       -A INPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
                       -A INPUT -p icmp --icmp-type time-exceeded -j ACCEPT
+                      -A INPUT -p tcp -i eth0 --dport 3306 -j ACCEPT
                       -A INPUT -p tcp -i eth0 --dport 4001 -j DROP
                       -A INPUT -p tcp -i eth0 --dport 7001 -j DROP
                       -A INPUT -i eth0 -j DROP
                       COMMIT
+                  - path: /etc/profile.d/db-functions.sh
+                    permissions: '0755'
+                    content: |
+                      function nse() {
+                        sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" $1)
+                      }
+                      function dev_db() {
+                        eval `cat /etc/environment`
+                        /usr/bin/docker run -it -e DEBUG=1 -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera paulczar/percona-galera:latest bash
+                      }
+                      function database() {
+                        sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" database)
+                      }
+                      function rebuild() {
+                        docker build -t paulczar/percona-galera /home/core/share
+                      }
+                      function cleanup() {
+                        etcdctl rm --recursive /database
+                      }
+                      function logs() {
+                        journalctl -u -f database.service
+                      }
                 coreos:
+                  update:
+                    reboot-strategy: best-effort
                   etcd:
                     # generate a new token for each unique cluster from https://discovery.etcd.io/new
                     # uncomment the following line and replace it with your discovery URL
@@ -122,15 +139,23 @@ resources:
                     command: start
                   - name: fleet.service
                     command: start
-                  - name: stop-update-engine.service
+                  - name: firewall.service
                     command: start
                     content: |
                       [Unit]
-                      Description=stop update-engine
+                      Description=firewall
+                      DefaultDependencies=no
+                      After=systemd-sysctl.service
+                      Before=sysinit.target
                       [Service]
                       Type=oneshot
-                      ExecStart=/usr/bin/systemctl stop update-engine.service
-                      ExecStartPost=/usr/bin/systemctl mask update-engine.service
+                      RemainAfterExit=yes
+                      ExecStart=/sbin/iptables-restore /etc/iptables.rules
+                      ExecReload=/usr/sbin/iptables-restore /etc/iptables.rules
+                      ExecStop=/usr/sbin/iptables --flush
+                      RemainAfterExit=yes
+                      [Install]
+                      WantedBy=sysinit.target
                   - name: database-data.service
                     command: start
                     enable: true
@@ -189,3 +214,6 @@ outputs:
   private_key:
     description: SSH Private Key
     value: { get_attr: [ssh_key, private_key] }
+  etcd_discovery:
+    description: etcd discovery URL
+    value: { get_param: etcd_discovery }
