@@ -16,9 +16,11 @@ function on_exit() {
 
 function cluster_members() {
   CLUSTER_MEMBERS=
-  for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/galeraEndpoints); do
+  LIST=
+  for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/mysqlNodes); do
     value=$(etcdctl --no-sync -C $ETCD get $key)
-    LIST+="$(basename $value),"
+    server=$(basename $value | awk -F':' '{print $1}')
+    LIST+="$server,"
   done
   CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
 }
@@ -28,7 +30,6 @@ function publish_to_etcd() {
     etcdctl $ETCD_OPTIONS set $ETCD_PATH/host $HOST --ttl $ETCD_TTL >/dev/null
     etcdctl $ETCD_OPTIONS set $ETCD_PATH/port $PUBLISH --ttl $ETCD_TTL >/dev/null
   else
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/galeraEndpoints/$HOSTNAME $HOST:4567 --ttl $ETCD_TTL >/dev/null
     etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $ETCD_TTL >/dev/null
   fi
 }
@@ -45,8 +46,8 @@ function init_database() {
   fi
   echo "==> starting mysql in order to set up passwords"
   mysqld_safe --skip-syslog --verbose &
-  echo "-----> sleeping for 20 seconds, then testing if DB is up"
-  sleep 20
+  echo "-----> sleeping for 5 seconds, then testing if DB is up"
+  sleep 5
   while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
   [[ -z $HOST ]] && mysql_creds || /app/bin/database_creds
   echo "==> stopping mysql after setting up passwords"

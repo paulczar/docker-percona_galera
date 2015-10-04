@@ -1,2 +1,4 @@
 .vagrant
 user-data
+user-data-*
+registry/*

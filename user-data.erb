@@ -1,73 +1,237 @@
 #cloud-config
 
 coreos:
+  update:
+    reboot-strategy: off
   etcd:
       #generate a new token for each unique cluster from https://discovery.etcd.io/new
       <%= @etcd_discovery %>
       addr: $public_ipv4:4001
       peer-addr: $public_ipv4:7001
   units:
+<% if @flannel %>
     - name: etcd.service
       command: start
     - name: fleet.service
       command: start
-    - name: docker-tcp.socket
+    - name: flannel.service
       command: start
-      enable: true
       content: |
         [Unit]
-        Description=Docker Socket for the API
-        [Socket]
-        ListenStream=4243
-        Service=docker.service
-        BindIPv6Only=both
+        After=network-online.target
+        Wants=network-online.target
+        After=etcd.service
+        Wants=etcd.service
+        Description=flannel is an etcd backed overlay network for containers
+
+        [Service]
+        Type=notify
+        ExecStartPre=-/usr/bin/mkdir -p /opt/bin
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://storage.googleapis.com/k8s/flanneld
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/flanneld
+        ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{ "Network": "<%= @flannel_network %>" }'
+        ExecStart=/opt/bin/flanneld -etcd-endpoints http://127.0.0.1:4001 -iface eth1
+    - name: docker.service
+      command: start
+      content: |
+        [Unit]
+        After=flannel.service
+        Wants=flannel.service
+        Description=Docker Application Container Engine
+        Documentation=http://docs.docker.io
+
+        [Service]
+        EnvironmentFile=/run/flannel/subnet.env
+        ExecStartPre=/bin/mount --make-rprivate /
+        ExecStart=/usr/bin/docker -d --bip=${FLANNEL_SUBNET} --mtu=${FLANNEL_MTU} -s=overlay -H fd:// $DOCKER_OPTS
+
         [Install]
-        WantedBy=sockets.target
-    - name: database-data.service
+        WantedBy=multi-user.target
+    - name: setup-network-environment.service
       command: start
-      enable: true
       content: |
         [Unit]
-        Description=database data
-        After=docker.service
+        Description=Setup Network Environment
+        Documentation=https://github.com/kelseyhightower/setup-network-environment
+        Requires=network-online.target
+        After=network-online.target
+
         [Service]
-        Type=oneshot
+        ExecStartPre=-/usr/bin/mkdir -p /opt/bin
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://storage.googleapis.com/k8s/setup-network-environment
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/setup-network-environment
+        ExecStart=/opt/bin/setup-network-environment
         RemainAfterExit=yes
-        ExecStartPre=/usr/bin/docker pull paulczar/percona-galera:latest
-        ExecStart=/bin/sh -c "/usr/bin/docker inspect database-data >/dev/null 2>&1 || docker run --name database-data -v /var/lib/mysql paulczar/percona-galera:latest true"
-    - name: database.service
-      command: <%= @command %>
-      enable: true
+        Type=oneshot
+<% else %>
+    - name: etcd.service
+      command: start
+    - name: fleet.service
+      command: start
+<% end %>
+<% @applications.each do |name,app| %>
+    - name: factorish-<%= name %>.service
+      command: start
       content: |
         [Unit]
-        Description=database
-        After=database-data.service
+        Description=Factorish <%= name %>
+        Requires=factorish-registry.service
+        After=factorish-registry.service
+
         [Service]
-        Restart=always
         EnvironmentFile=/etc/environment
-        TimeoutStartSec=20m
-        ExecStartPre=/usr/bin/docker pull paulczar/percona-galera:latest
-        ExecStart=/bin/sh -c "/usr/bin/docker run --name database --rm -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera --volumes-from database-data paulczar/percona-galera:latest"
-        ExecStop=/usr/bin/docker stop database
+        TimeoutStartSec=0
+        ExecStartPre=-/usr/bin/docker kill factorish-<%= name %>
+        ExecStartPre=-/usr/bin/docker rm factorish-<%= name %>
+  <% if app.has_key?('dockerfile') && app['dockerfile'] %>
+        ExecStartPre=-/run/factorish/build_image <%= app['dockerfile'] %> <%= app['repository'] %> <%= name %>
+  <% else %>
+        ExecStartPre=-/run/factorish/fetch_image <%= name %> <%= app['repository'] %>
+  <% end %>
+        ExecStart=/bin/sh -c "/usr/bin/docker run --rm <%= app['docker_options'].join(' ') %> <%= @election %> --name factorish-<%= name %> <%= app['repository']%> <%= app['command'] %>"
+        ExecStop=/usr/bin/docker stop factorish-<%= name %>
+<% end %>
 write_files:
+  - path: /etc/systemd/system/docker.service.d/50-insecure-registry.conf
+    content: |
+        [Service]
+        Environment=DOCKER_OPTS='--insecure-registry="127.0.0.1:5000"'
   - path: /etc/motd
-    content: "Database Cluster Demo\n"
-  - path: /etc/profile.d/db-functions.sh
+    content: "Example Demo\n"
+  - path: /run/factorish/fetch_image
     permissions: '0755'
     content: |
-      function nse() {
-        sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" $1)
+      #!/bin/bash
+      set -x
+      if [[ -z $1 || -z $2 ]]; then
+        echo 'Usage: fetch_service <name> <repository>'
+        exit 1
+      fi
+      if [[ -e /run/factorish/fetch_$1.lock ]]; then
+        echo -n 'waiting my turn'
+        while [[ -e /run/factorish/fetch_$1.lock ]]; do
+          sleep 5
+          echo -n .
+        done
+        echo .
+      else
+        echo $1 > /run/factorish/fetch_$1.lock
+      fi
+      echo Initializing service - $1
+      while ! etcdctl ls /; do
+        sleep 1
+      done
+      etcdctl ls /factorish/services/$1 >/dev/null 2>&1 || etcdctl mkdir /factorish/services/$1 >/dev/null 2>&1
+      if etcdctl mk /factorish/services/$1/fetching 1 >/dev/null 2>&1; then
+        if [[ -e /home/core/share/registry/$1.tgz ]]; then
+          echo - Loading $1 from host cache...
+          docker images registry | grep registry > /dev/null || \
+            docker load < /home/core/share/registry/$1.tgz > /dev/null 2>&1
+        else
+          echo - Pulling $2 from docker hub...
+          docker pull $2 > /dev/null
+          docker save $2 > /home/core/share/registry/$1.tgz
+        fi
+        etcdctl rm /factorish/services/$1/fetching
+        etcdctl mk /factorish/services/$1/cached
+        rm -f /run/factorish/fetch_$1.lock
+        exit 0
+      else
+        if ! etcdctl get /factorish/services/$1/cached; then
+          while etcdctl get /factorish/services/$1/fetching >/dev/null 2>&1; do
+            sleep 10
+          done
+        fi
+        echo - Loading $1 from host cache...
+        docker images registry | grep registry > /dev/null || \
+          docker load < /home/core/share/registry/$1.tgz > /dev/null 2>&1
+      fi
+      rm -f /run/factorish/fetch_$1.lock
+  - path: /run/factorish/build_image
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -x
+      if [[ -z $1 || -z $2 ]]; then
+        echo 'Usage: factorish_image <dockerfile> <repository> <name>'
+        exit 1
+      fi
+      echo -n waiting for registry to come online
+      while ! curl -s http://127.0.0.1:5000/v2/ >/dev/null; do
+        sleep 1
+        echo -n .
+      done
+      echo .
+      if [[ -e /run/factorish/build_$3.lock ]]; then
+        echo -n 'waiting my turn'
+        while [[ -e /run/factorish/build_$3.lock ]]; do
+          sleep 5
+          echo -n .
+        done
+        echo .
+      else
+        echo $1 > /run/factorish/build_$3.lock
+      fi
+      while etcdctl get /factorish/builds/$3/building >/dev/null 2>&1; do
+        sleep 10
+      done
+      echo Building $2 image
+      echo fetching 127.0.0.1:5000/$2 if it already exists
+      if ! docker pull 127.0.0.1:5000/$2; then
+        echo not found, lets build it.
+        etcdctl ls /factorish/builds >/dev/null 2>&1 || etcdctl mkdir /factorish/builds/$3 >/dev/null 2>&1
+        if etcdctl mk /factorish/builds/$3/building 1 >/dev/null 2>&1; then
+          docker build -t 127.0.0.1:5000/$2 $1
+          docker tag -f 127.0.0.1:5000/$2 $2
+          docker push 127.0.0.1:5000/$2
+          etcdctl rm /factorish/builds/$3/building >/dev/null 2>&1
+          etcdctl mk /factorish/builds/$3/built 1 >/dev/null 2>&1
+          rm -f /run/factorish/build_$3.lock
+          echo finished.
+          exit 0
+        fi
+      fi
+      if ! etcdctl get /factorish/builds/$3/built; then
+        while etcdctl get /factorish/builds/$3/building >/dev/null 2>&1; do
+          sleep 10
+        done
+      fi
+      if docker pull 127.0.0.1:5000/$2; then
+        docker tag -f 127.0.0.1:5000/$2 $2
+        echo - $2 pulled from private registry.
+        echo - run ./clean_registry if you expected this to rebuild.
+      fi
+      rm -f /run/factorish/build_$3.lock
+  - path: /etc/profile.d/functions.sh
+    permissions: '0755'
+    content: |
+<% @applications.each do |name, app| %>
+      function run_<%= name %>() {
+        eval `cat /etc/environment | sed "s/^/export /"`
+        echo "Running factorish-<%= name %>"
+        docker run  -d <%= app['docker_options'].join(' ') %> <%= @election %> --name factorish-<%= name %> <%= app['repository']%> <%= app['command'] %>
       }
-      function dev_db() {
-        eval `cat /etc/environment`
-        /usr/bin/docker run -it -e DEBUG=1 -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=3306 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=galera paulczar/percona-galera:latest bash
+      function kill_<%= name %>() {
+        /usr/bin/docker kill factorish-<%= name %>
+        /usr/bin/docker rm factorish-<%= name %>
       }
-      function database() {
-        sudo nsenter --pid --uts --mount --ipc --net --target $(docker inspect --format="{{ .State.Pid }}" database)
+      function build_<%= name %>() {
+        docker build -t <%= app['repository'] %> <%=app['dockerfile'] %>
       }
-      function rebuild() {
-        docker build -t paulczar/percona-galera /home/core/share
+      function log_<%= name %>() {
+        docker logs -f factorish-<%= name %>
       }
+      function journal_<%= name %>() {
+        journalctl -f -u factorish-<%= name %>
+      }
+      function push_<%= name %>() {
+        docker tag -f <%= app['repository'] %> 127.0.0.1:5000/<%= app['repository'] %>
+        docker push 127.0.0.1:5000/<%= app['repository'] %>
+      }
+      function <%= name %>() {
+        /usr/bin/docker exec -it factorish-<%= name %> bash
+      }
+<% end %>
       function cleanup() {
-        etcdctl rm --recursive /database
+        etcdctl rm --recursive /services
       }

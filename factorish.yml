@@ -1,0 +1,45 @@
+factorish:
+  mode: develop
+  memory: 2048
+  cpus: 1
+  instances: 3
+  expose_docker: True
+  expose_etcd: True
+  expose_registry: True
+  expose_ports:
+    - 3306
+  coreos:
+    channel: beta
+    min_version: 554
+    flannel:
+      enabled: False
+      network: 10.1.0.0/16
+  applications:
+    registry:
+      repository: registry:2
+      docker_options:
+        - '-p 5000:5000'
+        - '-e GUNICORN_OPTS=[--preload]'
+        - '-e search_backend='
+        - '-v /home/core/share/registry:/var/lib/registry'
+      command:
+    registrator:
+      repository: gliderlabs/registrator
+      docker_options:
+        - '-v /var/run/docker.sock:/tmp/docker.sock:ro'
+        - '-h $HOSTNAME'
+      command: '-ttl 30 -ttl-refresh 20 etcd://$COREOS_PRIVATE_IPV4:4001/services'
+    database:
+      repository: factorish/percona-galera
+      docker_options:
+        - "-e ETCD_HOST=$COREOS_PRIVATE_IPV4"
+        - "-e HOST=$COREOS_PRIVATE_IPV4"
+        - "-e SERVICE_NAME=database"
+        - "-p 3306:3306 -e SERVICE_3306_NAME=database_port"
+        - "-p 4444:4444 -e SERVICE_4444_NAME=database_sst"
+        - "-p 4567:4567 -e SERVICE_4567_NAME=database_mon"
+        - "-p 4568:4568 -e SERVICE_4568_NAME=database_ssi"
+        - "-e CLUSTER=database"
+        - "-l SERVICE_NAME=database"
+      dockerfile: /home/core/share/database
+      command: /app/bin/boot

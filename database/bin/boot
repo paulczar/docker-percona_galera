@@ -19,16 +19,18 @@ MYSQL_USER=${MYSQL_USER:-admin}
 MYSQL_PASS=${MYSQL_PASS:-admin}
 REP_USER=${REP_USER:-replicator}
 REP_PASS=${REP_PASS:-replicator}
+PUBLISH=${PUBLISH:-3306}
 PORT=${PUBLISH:-3306}
 PROTO=${PROTO:-tcp}
 ETCD_HOST=${ETCD_HOST:-$HOST}
+
+rm /var/log/mysql/error.log
+ln -s /dev/stdout /var/log/mysql/error.log
 
 if [[ -z $HOST ]]; then
   echo '==> $HOST not set.  booting mysql without clustering.'
   init_database
   echo "==> database running..."
-  touch /var/log/mysql/error.log
-  tail -f /var/log/mysql/error.log &
   mysqld_safe $DB_OPTIONS
   exit $?
 fi
@@ -43,7 +45,7 @@ etcd_set_default credentials/repPass ${REP_PASS}
 etcd_set_default host $HOST
 etcd_set_default port $PORT
 
-if [[ ! -z $CLUSTER ]]; then
+if [[ -n $CLUSTER ]]; then
   etcd_set_default cluster/name ${CLUSTER}
   etcd_make_directory cluster/mysqlNodes
   etcd_make_directory cluster/galeraEndpoints
@@ -64,16 +66,10 @@ cluster_members
 echo Starting MySQL for reals
 
 if [[ -z $CLUSTER_MEMBERS ]]; then
-  # Perform Election
-  echo "==> Performing Election..."
-  etcdctl $ETCD_OPTIONS ls $ETCD_PATH/election >/dev/null 2>&1 || etcdctl $ETCD_OPTIONS mkdir $ETCD_PATH/election >/dev/null 2>&1
-  if etcdctl $ETCD_OPTIONS mk $ETCD_PATH/election/bootstrap $HOSTNAME >/dev/null 2>&1; then
-    echo "-----> Hurruh I win!"
-    BOOTSTRAP=1
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/election/bootstrap $HOSTNAME --ttl 300 >/dev/null 2>&1
+  if [[ -n $BOOTSTRAP ]]; then
     mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS &
   else
-    echo -n "-----> I lost election.  Waiting for leader."
+    echo -n "-----> Waiting for primary."
     until [[ ! -z $CLUSTER_MEMBERS ]]; do
       cluster_members
       echo -n "."
@@ -90,7 +86,6 @@ else
   mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
 fi
 
-
 SERVICE_PID=$!
 
 echo $SERVICE_PID > /app/database.pid
@@ -103,19 +98,15 @@ confd -node $ETCD -config-file /app/confd.toml &
 CONFD_PID=$!
 
 # wait for the service to become available
-echo "==> sleeping for 20 seconds, then testing if DB is up."
-sleep 20
+echo "==> sleeping for 5 seconds, then testing if DB is up."
+sleep 5
 while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
 
 echo "==> database running..."
 
-tail -f /var/log/mysql/error.log &
-
 # publish the service to etcd using the injected HOST and PORT
-if [[ ! -z $PUBLISH ]]; then
-
+if [[ -n $PUBLISH ]]; then
   set +e
-
   # wait for the service to become available on PUBLISH port
   sleep 1 && while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
 
