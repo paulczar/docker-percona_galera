@@ -1,9 +1,11 @@
 Percona/Galera Docker Image
 ===========================
 
-This docker image contains Percona with the galera extentions and XtraBackup installed.
+This docker project contains two Docker images, the first contains Percona with the galera extentions and XtraBackup installed, the second contains the mysql loadbalancer `maxscale`
 
 If etcd is available it will automatically cluster itself with Galera and the XtraBackup SST.
+
+
 
 Fetching
 ========
@@ -47,8 +49,7 @@ Galera Cluster
 
 When etcd is available the container will check to see if there's an existing cluster, if so it will join it.  If not it will perform an election that will last for 5 minutes.  During that time the first server that can grab a lock becomes the leader and any other nodes will wait until that server is ready before starting.   If the leader fails to start the election is busted and all nodes will need to be destroyed until the 5 minutes passes.
 
-An example Vagrantfile is provided which will start a 3 node `CoreOS` cluster each node running a
-database with replication automatically set up.
+An example Vagrantfile is provided which will start a 3 node `CoreOS` cluster each node running a database with replication automatically set up as well as a `maxscale` load balancer.
 
     $ vagrant up
     $ ssh coreos-01
@@ -111,15 +112,7 @@ Load Balancer
 You can use an external load balancer if you have one DB per host.  If you're getting fancy you can also run a local haproxy load balancer ( or multiples ) which will load balance ( round robin, nothing fancy ) database connections between your nodes
 
     $ eval `cat /etc/environment`
-    $ /usr/bin/docker run --name database-loadbalancer --rm -p 3307:3307 -p 8888:8080 -e PUBLISH=3307 -e HOST=$COREOS_PRIVATE_IPV4 paulczar/percona-galera:latest /app/bin/loadbalancer
-
-Development
------------
-
-You can use vagrant in developer mode which will install the service but not run it.  it will also enable debug mode on the start script, share the local path into `/home/coreos/share` via `nfs` and build the image locally.   This takes quite a while as it builds the image on each VM, but once its up further rebuilds should be quick thanks to the caches.
-
-    $ dev=1 vagrant up
-    $ vagrant ssh core-01
+    $ /usr/bin/docker run --name database-loadbalancer --rm -p 4006:4006 -p 4008:4008  -e PUBLISH=4006 -e HOST=$COREOS_PRIVATE_IPV4 paulczar/maxscale:latest
 
 
 Author(s)

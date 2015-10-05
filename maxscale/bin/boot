@@ -1,0 +1,79 @@
+#!/bin/bash
+#
+# This script is designed to be run inside the container
+#
+
+# fail hard and fast even on pipelines
+set -eo pipefail
+
+# set debug based on envvar
+[[ $DEBUG ]] && set -x
+
+DIR=$(dirname $0)
+
+# functions
+. $DIR/functions
+
+PUBLISH=${PUBLISH:-4006}
+PORT=${PUBLISH:-4006}
+PROTO=${PROTO:-tcp}
+ETCD_HOST=${ETCD_HOST:-$HOST}
+
+if [[ -z $HOST ]]; then
+  echo 'need $HOST set to etcd host'
+  exit 1
+fi
+
+configure_etcd
+
+# wait for confd to run once and install initial templates
+until confd -onetime -node $ETCD -config-file /app/confd.toml; do
+  echo "echo ==> database: waiting for confd to write initial templates..."
+  sleep $(($ETCD_TTL/2))  # sleep for half the TTL
+done
+
+echo Starting MaxScale
+
+maxscale -d -f /etc/maxscale.cnf --syslog=no --log=file --logdir=/var/log &
+
+SERVICE_PID=$!
+
+echo $SERVICE_PID > /app/maxscale.pid
+
+sleep 1
+
+maxadmin -pmariadb reload dbusers "Read Connection Router"
+maxadmin -pmariadb reload dbusers "RW Split Router"
+
+# smart shutdown on SIGINT and SIGTERM
+trap on_exit INT TERM
+
+# spawn confd in the background to update services based on etcd changes
+confd -node $ETCD -config-file /app/confd.toml &
+CONFD_PID=$!
+
+# wait for the service to become available
+echo "==> sleeping for 5 seconds, then testing if maxscale is up."
+sleep 5
+while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+
+echo "==> maxscale running..."
+
+# publish the service to etcd using the injected HOST and PORT
+if [[ -n $PUBLISH ]]; then
+  set +e
+  # wait for the service to become available on PUBLISH port
+  sleep 1 && while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+
+  # while the port is listening, publish to etcd
+  while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
+    publish_to_etcd
+    sleep $(($ETCD_TTL/2)) # sleep for half the TTL
+  done
+
+  # if the loop quits, something went wrong
+  exit 1
+
+fi
+
+wait

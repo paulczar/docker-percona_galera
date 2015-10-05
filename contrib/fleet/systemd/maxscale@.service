@@ -1,0 +1,15 @@
+[Unit]
+Description=MySQL Load Balancer
+After=maxscale-%i.service
+
+[Service]
+EnvironmentFile=/etc/environment
+TimeoutStartSec=20m
+ExecStartPre=-/usr/bin/docker kill maxscale-%i
+ExecStartPre=-/usr/bin/docker rm maxscale-%i
+ExecStartPre=/usr/bin/docker pull paulczar/maxscale:latest
+ExecStart=/bin/sh -c "/usr/bin/docker run --name maxscale-%i --rm -p 4006:4006 -p 4008:4008  -e PUBLISH=4006 -e HOST=$COREOS_PRIVATE_IPV4 paulczar/maxscale:latest"
+ExecStop=/usr/bin/docker stop maxscale-%i
+
+[X-Fleet]
+X-Conflicts=maxscale@*.service

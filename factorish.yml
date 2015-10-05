@@ -43,3 +43,13 @@ factorish:
         - "-l SERVICE_NAME=database"
       dockerfile: /home/core/share/database
       command: /app/bin/boot
+    maxscale:
+      repository: factorish/maxscale
+      docker_options:
+        - "-e ETCD_HOST=$COREOS_PRIVATE_IPV4"
+        - "-e HOST=$COREOS_PRIVATE_IPV4"
+        - "-e SERVICE_NAME=maxscale"
+        - "-p 4008:4008 -e SERVICE_4008_NAME=lb_read"
+        - "-p 4006:4006 -e SERVICE_4006_NAME=lb_rw"
+      dockerfile: /home/core/share/maxscale
+      command: /app/bin/boot

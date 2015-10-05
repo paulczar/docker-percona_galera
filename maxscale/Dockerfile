@@ -6,13 +6,14 @@
 FROM ubuntu:trusty
 MAINTAINER Paul Czarkowski "paul@paulcz.net"
 
-ENV PERCONA_VERSION=5.6 ETCD_VERSION=2.2.0 CONFD_VERSION=0.10.0
-
-WORKDIR /tmp
+ENV MAXSCALE_VERSION=1.2.1 DEBIAN_FRONTEND=noninteractive ETCD_VERSION=2.2.0 CONFD_VERSION=0.10.0 MAXSCALE_HOME=/usr/local/skysql/maxscale
 
 # Base Deps
 RUN \
-  apt-get update && apt-get install -yq \
+  apt-get install -yqq software-properties-common && \
+  apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 8167EE24 && \
+  echo "deb http://downloads.mariadb.com/enterprise/6whk-mygr/mariadb-maxscale/${MAXSCALE_VERSION}/ubuntu trusty main" > /etc/apt/sources.list.d/maxscale.list && \
+  apt-get update -yqq && apt-get install -yqq \
   make \
   ca-certificates \
   net-tools \
@@ -25,17 +26,12 @@ RUN \
   lsb-release \
   locales \
   socat \
+  mysql-client \
+  maxscale \
   --no-install-recommends && \
   locale-gen en_US.UTF-8 && \
-  apt-key adv --keyserver keys.gnupg.net --recv-keys 1C4CBDCDCD2EFD2A && \
-  echo "deb http://repo.percona.com/apt `lsb_release -cs` main" > /etc/apt/sources.list.d/percona.list && \
-  echo "deb-src http://repo.percona.com/apt `lsb_release -cs` main" >> /etc/apt/sources.list.d/percona.list && \
-  ln -fs /bin/true /usr/bin/chfn && \
-  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive apt-get install -y percona-xtradb-cluster-client-${PERCONA_VERSION} percona-xtradb-cluster-server-${PERCONA_VERSION}  percona-xtrabackup rsync percona-xtradb-cluster-garbd-3.x && \
   rm -rf /var/lib/apt/lists/* && \
-  sed -i 's/^\(bind-address\s.*\)/# \1/' /etc/mysql/my.cnf && \
-  rm -rf /var/lib/mysql/*
+  mkdir /etc/MaxScale
 
 # download latest stable etcdctl
 RUN \
@@ -53,18 +49,12 @@ RUN \
     -o /usr/local/bin/confd \
     && chmod +x /usr/local/bin/confd
 
-# Define mountable directories.
-VOLUME ["/var/lib/mysql"]
-
-ADD . /app
-
-# Define working directory.
-WORKDIR /app
+COPY . /app
 
 RUN chmod +x /app/bin/*
 
-# Define default command.
-CMD ["/app/bin/boot"]
+WORKDIR /app
 
-# Expose ports.
-EXPOSE 3306 4444 4567 4568
+EXPOSE 4006 4008
+
+CMD /app/bin/boot
