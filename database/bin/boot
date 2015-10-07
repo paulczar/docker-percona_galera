@@ -14,7 +14,7 @@ DIR=$(dirname $0)
 # functions
 . $DIR/functions
 
-DB_OPTIONS=""
+DB_OPTIONS=${DB_OPTIONS:-""}
 MYSQL_USER=${MYSQL_USER:-admin}
 MYSQL_PASS=${MYSQL_PASS:-admin}
 REP_USER=${REP_USER:-replicator}
@@ -31,7 +31,7 @@ if [[ -z $HOST ]]; then
   echo '==> $HOST not set.  booting mysql without clustering.'
   init_database
   echo "==> database running..."
-  mysqld_safe $DB_OPTIONS
+  mysqld_safe ${DB_OPTIONS}
   exit $?
 fi
 

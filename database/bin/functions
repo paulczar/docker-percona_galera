@@ -45,7 +45,7 @@ function init_database() {
     echo "-----> Using an existing database"
   fi
   echo "==> starting mysql in order to set up passwords"
-  mysqld_safe --skip-syslog --verbose &
+  mysqld_safe --skip-syslog &
   echo "-----> sleeping for 5 seconds, then testing if DB is up"
   sleep 5
   while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done

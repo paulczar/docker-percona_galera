@@ -53,6 +53,7 @@ Vagrant.configure('2') do |config|
       c.vm.network :private_network, ip: ip
 
       c.vm.synced_folder '.', '/home/core/share', id: 'core', nfs: true, mount_options: ['nolock,vers=3,udp']
+      c.vm.provision "shell", inline: "echo noop > /sys/block/sda/queue/scheduler"
       if File.exist?("./user-data-#{i}")
         c.vm.provision :file, source: "./user-data-#{i}", destination: '/tmp/vagrantfile-user-data'
         c.vm.provision :shell, inline: 'mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/', privileged: true

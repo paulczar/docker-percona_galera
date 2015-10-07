@@ -35,6 +35,7 @@ factorish:
         - "-e ETCD_HOST=$COREOS_PRIVATE_IPV4"
         - "-e HOST=$COREOS_PRIVATE_IPV4"
         - "-e SERVICE_NAME=database"
+        - "-e DB_OPTIONS='--verbose --skip-sync-frm --innodb_flush_log_at_trx_commit=0 --innodb-support-xa=0 --query-cache-type=1'"
         - "-p 3306:3306 -e SERVICE_3306_NAME=database_port"
         - "-p 4444:4444 -e SERVICE_4444_NAME=database_sst"
         - "-p 4567:4567 -e SERVICE_4567_NAME=database_mon"
