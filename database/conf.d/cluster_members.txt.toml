@@ -1,0 +1,10 @@
+[template]
+src   = "cluster_members.txt"
+dest  = "/app/cluster_members.txt"
+owner = "root"
+group = "root"
+mode  = "0644"
+keys = [
+  "/services"
+]
+check_cmd = "/app/bin/check {{ .src }}"

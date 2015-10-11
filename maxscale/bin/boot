@@ -14,22 +14,29 @@ DIR=$(dirname $0)
 # functions
 . $DIR/functions
 
-PUBLISH=${PUBLISH:-4006}
-PORT=${PUBLISH:-4006}
-PROTO=${PROTO:-tcp}
-ETCD_HOST=${ETCD_HOST:-$HOST}
+export PUBLISH=${PUBLISH:-4006}
+export PORT=${PUBLISH:-4006}
+export PROTO=${PROTO:-tcp}
+export ETCD_HOST=${ETCD_HOST:-$HOST}
+export REGISTRATOR=${REGISTRATOR:-1}
+MYSQL_USER=${MYSQL_USER:-admin}
+MYSQL_PASS=${MYSQL_PASS:-admin}
 
 if [[ -z $HOST ]]; then
   echo 'need $HOST set to etcd host'
   exit 1
 fi
 
-configure_etcd
+if [[ -n $REGISTRATOR ]]; then
+  configure_registrator
+else
+  configure_etcd
+fi
 
 # wait for confd to run once and install initial templates
 until confd -onetime -node $ETCD -config-file /app/confd.toml; do
   echo "echo ==> database: waiting for confd to write initial templates..."
-  sleep $(($ETCD_TTL/2))  # sleep for half the TTL
+  sleep $(($TTL/2))  # sleep for half the TTL
 done
 
 echo Starting MaxScale
@@ -67,8 +74,10 @@ if [[ -n $PUBLISH ]]; then
 
   # while the port is listening, publish to etcd
   while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
-    publish_to_etcd
-    sleep $(($ETCD_TTL/2)) # sleep for half the TTL
+    if [[ -n $REGISTRATOR ]]; then
+      publish_to_etcd
+      sleep $(($TTL/2)) # sleep for half the TTL
+    fi
   done
 
   # if the loop quits, something went wrong

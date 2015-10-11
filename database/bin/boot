@@ -14,15 +14,16 @@ DIR=$(dirname $0)
 # functions
 . $DIR/functions
 
-DB_OPTIONS=${DB_OPTIONS:-""}
-MYSQL_USER=${MYSQL_USER:-admin}
-MYSQL_PASS=${MYSQL_PASS:-admin}
-REP_USER=${REP_USER:-replicator}
-REP_PASS=${REP_PASS:-replicator}
-PUBLISH=${PUBLISH:-3306}
-PORT=${PUBLISH:-3306}
-PROTO=${PROTO:-tcp}
-ETCD_HOST=${ETCD_HOST:-$HOST}
+export DB_OPTIONS=${DB_OPTIONS:-""}
+export MYSQL_USER=${MYSQL_USER:-admin}
+export MYSQL_PASS=${MYSQL_PASS:-admin}
+export REP_USER=${REP_USER:-replicator}
+export REP_PASS=${REP_PASS:-replicator}
+export PUBLISH=${PUBLISH:-3306}
+export PORT=${PUBLISH:-3306}
+export PROTO=${PROTO:-tcp}
+export ETCD_HOST=${ETCD_HOST:-$HOST}
+export REGISTRATOR=${REGISTRATOR:-1}
 
 rm /var/log/mysql/error.log
 ln -s /dev/stdout /var/log/mysql/error.log
@@ -35,26 +36,28 @@ if [[ -z $HOST ]]; then
   exit $?
 fi
 
-configure_etcd
-
-etcd_set_default engine percona
-etcd_set_default credentials/adminUser ${MYSQL_USER}
-etcd_set_default credentials/adminPass ${MYSQL_PASS}
-etcd_set_default credentials/repUser ${REP_USER}
-etcd_set_default credentials/repPass ${REP_PASS}
-etcd_set_default host $HOST
-etcd_set_default port $PORT
-
-if [[ -n $CLUSTER ]]; then
-  etcd_set_default cluster/name ${CLUSTER}
-  etcd_make_directory cluster/mysqlNodes
-  etcd_make_directory cluster/galeraEndpoints
+if [[ -n $REGISTRATOR ]]; then
+  configure_registrator
+else
+  configure_etcd
+  etcd_set_default engine percona
+  etcd_set_default credentials/adminUser ${MYSQL_USER}
+  etcd_set_default credentials/adminPass ${MYSQL_PASS}
+  etcd_set_default credentials/repUser ${REP_USER}
+  etcd_set_default credentials/repPass ${REP_PASS}
+  etcd_set_default host $HOST
+  etcd_set_default port $PORT
+  if [[ -n $CLUSTER ]]; then
+    etcd_set_default cluster/name ${CLUSTER}
+    etcd_make_directory cluster/mysqlNodes
+    etcd_make_directory cluster/galeraEndpoints
+  fi
 fi
 
 # wait for confd to run once and install initial templates
 until confd -onetime -node $ETCD -config-file /app/confd.toml; do
-  echo "echo ==> database: waiting for confd to write initial templates..."
-  sleep $(($ETCD_TTL/2))  # sleep for half the TTL
+  echo "==> database: waiting for confd to write initial templates..."
+  sleep $(($TTL/2))  # sleep for half the TTL
 done
 
 # initialize data volume
@@ -63,26 +66,28 @@ init_database
 WSREP_OPTIONS="--wsrep_node_address=$HOST $DB_OPTIONS"
 cluster_members
 
-echo Starting MySQL for reals
+echo "==> Starting MySQL"
 
 if [[ -z $CLUSTER_MEMBERS ]]; then
   if [[ -n $BOOTSTRAP ]]; then
+    echo "-----> Starting primary database."
     mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS &
   else
-    echo -n "-----> Waiting for primary."
+    echo "-----> Waiting for primary database."
     until [[ ! -z $CLUSTER_MEMBERS ]]; do
       cluster_members
       echo -n "."
       sleep 10
     done
-    echo "-----> leader ready.  Starting."
+    echo "-----> primary ready.  Starting."
     sleep 5
     echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
+    echo "  mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS"
     mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
   fi
 else
-  cluster_members
   echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
+  echo "  mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS"
   mysqld --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS &
 fi
 
@@ -112,8 +117,10 @@ if [[ -n $PUBLISH ]]; then
 
   # while the port is listening, publish to etcd
   while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
-    publish_to_etcd
-    sleep $(($ETCD_TTL/2)) # sleep for half the TTL
+    if [[ -z $REGISTRATOR ]]; then
+      publish_to_etcd
+    fi
+    sleep $(($TTL/2)) # sleep for half the TTL
   done
 
   # if the loop quits, something went wrong

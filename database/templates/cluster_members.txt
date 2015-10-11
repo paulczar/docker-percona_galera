@@ -1,0 +1,3 @@
+{{range $index, $server := getvs "/services/database_sst/*"}}{{ $arr := split $server ":" }}
+{{ index $arr 0 }}
+{{ end }}

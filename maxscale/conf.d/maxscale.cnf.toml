@@ -5,9 +5,7 @@ owner = "root"
 group = "root"
 mode  = "0644"
 keys = [
-  "/database/credentials/adminUser",
-  "/database/credentials/adminPass",
-  "/database/cluster/mysqlNodes"
+  "/services/database_port"
 ]
 check_cmd = "/app/bin/check {{ .src }}"
 reload_cmd = "maxadmin -pmariadb reload config"

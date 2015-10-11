@@ -9,14 +9,12 @@
 [maxscale]
 threads=1
 
-{{ $servers := ls "/database/cluster/mysqlNodes" }}
-
 [MySQL Monitor]
 type=monitor
 module=mysqlmon
-servers={{join $servers ","}}
-user={{ getv "/database/credentials/adminUser" }}
-passwd={{ getv "/database/credentials/adminPass" }}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}}, {{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+user={{ getenv "MYSQL_USER" }}
+passwd={{ getenv "MYSQL_USER" }}
 monitor_interval=10000
 #backend_connect_timeout=
 #backend_read_timeout=
@@ -27,26 +25,26 @@ monitor_interval=10000
 [Galera Monitor]
 type=monitor
 module=galeramon
-servers={{join $servers ","}}
-user={{ getv "/database/credentials/adminUser" }}
-passwd={{ getv "/database/credentials/adminPass" }}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}}, {{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+user={{ getenv "MYSQL_USER" }}
+passwd={{ getenv "MYSQL_USER" }}
 monitor_interval=10000
 #disable_master_failback=
 
 [Read Connection Router]
 type=service
 router=readconnroute
-servers={{join $servers ","}}
-user={{ getv "/database/credentials/adminUser" }}
-passwd={{ getv "/database/credentials/adminPass" }}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}}, {{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+user={{ getenv "MYSQL_USER" }}
+passwd={{ getenv "MYSQL_USER" }}
 router_options=slave
 
 [RW Split Router]
 type=service
 router=readwritesplit
-servers={{join $servers ","}}
-user={{ getv "/database/credentials/adminUser" }}
-passwd={{ getv "/database/credentials/adminPass" }}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},{{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+user={{ getenv "MYSQL_USER" }}
+passwd={{ getenv "MYSQL_USER" }}
 max_slave_connections=100%
 #use_sql_variables_in=master
 #max_slave_replication_lag=21
@@ -96,10 +94,10 @@ protocol=maxscaled
 address=127.0.0.1
 port=6603
 
-{{range gets "/database/cluster/mysqlNodes/*"}}{{ $arr := split .Value ":" }}
-[{{ base .Key }}]
+{{range gets "/services/database_port/*"}}{{ $valArr := split .Value ":" }}{{ $Keys := base .Key }}{{ $keyArr := split $Keys ":" }}
+[{{ index $keyArr 0 }}]
 type=server
-address={{ index $arr 0 }}
-port={{ index $arr 1 }}
+address={{ index $valArr 0 }}
+port={{ index $valArr 1 }}
 protocol=MySQLBackend
 {{end}}

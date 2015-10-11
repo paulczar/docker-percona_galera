@@ -6,5 +6,5 @@ group = "root"
 mode  = "0644"
 keys = [
 ]
-check_cmd = "/usr/sbin/mysqld --help > /dev/null"
+check_cmd = "/app/bin/check {{ .src }}"
 reload_cmd = "ps axu | grep '/usr/sbin/mysqld' | grep -v grep | awk '{ print $2 }'"
