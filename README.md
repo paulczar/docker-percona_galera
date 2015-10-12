@@ -3,15 +3,24 @@ Percona/Galera Docker Image
 
 This docker project contains two Docker images, the first contains Percona with the galera extentions and XtraBackup installed, the second contains the mysql loadbalancer `maxscale`
 
-If etcd is available it will automatically cluster itself with Galera and the XtraBackup SST.
+This is a preview release which now uses registrator to handle all service registration and uses confd to do configuration.  This should make it simple to implement against Consul and other SD tools in the future.
 
+CoreOS
+======
 
+This has been written with the `CoreOS` ecosystem in mind.  To see it how it is intended please use the included `Vagrantfile`.  see _Galera Cluster_ section below.
 
 Fetching
 ========
 
     $ git clone https://github.com/paulczar/docker-percona_galera.git
-    cd docker-percona_galera
+    $ cd docker-percona_galera
+    $ git checkout use_registrator
+
+or
+
+    $ git pull paulczar/percona-galera:registrator
+    $ git pull paulczar/maxscale:registrator
 
 Building
 ========
