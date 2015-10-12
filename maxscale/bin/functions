@@ -1,11 +1,11 @@
 #!/bin/bash
 
 function etcd_set_default {
-  etcdctl --no-sync -C $ETCD mk $ETCD_PATH/$1 $2 >/dev/null 2>&1 || true
+  etcdctl --no-sync -C $ETCD mk /$1 $2 >/dev/null 2>&1 || true
 }
 
 function etcd_make_directory {
-  etcdctl --no-sync -C $ETCD setdir $ETCD_PATH/$1 >/dev/null 2>&1 || true
+  etcdctl --no-sync -C $ETCD setdir /$1 >/dev/null 2>&1 || true
 }
 
 function on_exit() {
@@ -14,24 +14,9 @@ function on_exit() {
     exit 0
 }
 
-function cluster_members() {
-  CLUSTER_MEMBERS=
-  LIST=
-  for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/mysqlNodes); do
-    value=$(etcdctl --no-sync -C $ETCD get $key)
-    server=$(basename $value | awk -F':' '{print $1}')
-    LIST+="$server,"
-  done
-  CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
-}
-
 function publish_to_etcd() {
-  if [[ -z $CLUSTER ]]; then
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/host $HOST --ttl $ETCD_TTL >/dev/null
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/port $PUBLISH --ttl $ETCD_TTL >/dev/null
-  else
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $ETCD_TTL >/dev/null
-  fi
+  etcdctl $ETCD_OPTIONS set /services/lb_rw/$HOSTNAME:factorish-maxscale:4006 $HOST:4006 > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/lb_read/$HOSTNAME:factorish-maxscale:4008 $HOST:4008 > /dev/null
 }
 
 function init_database() {
@@ -66,7 +51,6 @@ function mysql_creds() {
 function configure_etcd() {
   export ETCD_PORT=${ETCD_PORT:-4001}
   export ETCD="$ETCD_HOST:$ETCD_PORT"
-  export ETCD_PATH=${ETCD_PATH:-/database}
   export TTL=${TTL:-10}
   export ETCD_OPTIONS="--no-sync -C $ETCD"
   # wait for etcd to be available

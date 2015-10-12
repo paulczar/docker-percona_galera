@@ -12,7 +12,7 @@ threads=1
 [MySQL Monitor]
 type=monitor
 module=mysqlmon
-servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}}, {{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},{{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
 user={{ getenv "MYSQL_USER" }}
 passwd={{ getenv "MYSQL_USER" }}
 monitor_interval=10000
@@ -25,7 +25,7 @@ monitor_interval=10000
 [Galera Monitor]
 type=monitor
 module=galeramon
-servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}}, {{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},{{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
 user={{ getenv "MYSQL_USER" }}
 passwd={{ getenv "MYSQL_USER" }}
 monitor_interval=10000
@@ -34,7 +34,7 @@ monitor_interval=10000
 [Read Connection Router]
 type=service
 router=readconnroute
-servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}}, {{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},{{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
 user={{ getenv "MYSQL_USER" }}
 passwd={{ getenv "MYSQL_USER" }}
 router_options=slave

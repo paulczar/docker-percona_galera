@@ -18,20 +18,23 @@ export PUBLISH=${PUBLISH:-4006}
 export PORT=${PUBLISH:-4006}
 export PROTO=${PROTO:-tcp}
 export ETCD_HOST=${ETCD_HOST:-$HOST}
-export REGISTRATOR=${REGISTRATOR:-1}
-MYSQL_USER=${MYSQL_USER:-admin}
-MYSQL_PASS=${MYSQL_PASS:-admin}
+export NO_REGISTRATOR=${NO_REGISTRATOR:-}
+export MYSQL_USER=${MYSQL_USER:-admin}
+export MYSQL_PASS=${MYSQL_PASS:-admin}
 
 if [[ -z $HOST ]]; then
   echo 'need $HOST set to etcd host'
   exit 1
 fi
 
-if [[ -n $REGISTRATOR ]]; then
-  configure_registrator
-else
+if [[ -n $NO_REGISTRATOR ]]; then
   configure_etcd
+  etcd_make_directory services/lb_rw
+  etcd_make_directory services/lb_read
+else
+  configure_registrator
 fi
+
 
 # wait for confd to run once and install initial templates
 until confd -onetime -node $ETCD -config-file /app/confd.toml; do
@@ -74,7 +77,7 @@ if [[ -n $PUBLISH ]]; then
 
   # while the port is listening, publish to etcd
   while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
-    if [[ -n $REGISTRATOR ]]; then
+    if [[ -n $NO_REGISTRATOR ]]; then
       publish_to_etcd
       sleep $(($TTL/2)) # sleep for half the TTL
     fi

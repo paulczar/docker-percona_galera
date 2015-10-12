@@ -23,7 +23,7 @@ export PUBLISH=${PUBLISH:-3306}
 export PORT=${PUBLISH:-3306}
 export PROTO=${PROTO:-tcp}
 export ETCD_HOST=${ETCD_HOST:-$HOST}
-export REGISTRATOR=${REGISTRATOR:-1}
+export NO_REGISTRATOR=${NO_REGISTRATOR:-}
 
 rm /var/log/mysql/error.log
 ln -s /dev/stdout /var/log/mysql/error.log
@@ -36,22 +36,14 @@ if [[ -z $HOST ]]; then
   exit $?
 fi
 
-if [[ -n $REGISTRATOR ]]; then
-  configure_registrator
-else
+if [[ -n $NO_REGISTRATOR ]]; then
   configure_etcd
-  etcd_set_default engine percona
-  etcd_set_default credentials/adminUser ${MYSQL_USER}
-  etcd_set_default credentials/adminPass ${MYSQL_PASS}
-  etcd_set_default credentials/repUser ${REP_USER}
-  etcd_set_default credentials/repPass ${REP_PASS}
-  etcd_set_default host $HOST
-  etcd_set_default port $PORT
-  if [[ -n $CLUSTER ]]; then
-    etcd_set_default cluster/name ${CLUSTER}
-    etcd_make_directory cluster/mysqlNodes
-    etcd_make_directory cluster/galeraEndpoints
-  fi
+  etcd_make_directory services/database_port
+  etcd_make_directory services/database_sst
+  etcd_make_directory services/database_ssi
+  etcd_make_directory services/database_mon
+else
+  configure_registrator
 fi
 
 # wait for confd to run once and install initial templates
@@ -117,7 +109,7 @@ if [[ -n $PUBLISH ]]; then
 
   # while the port is listening, publish to etcd
   while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
-    if [[ -z $REGISTRATOR ]]; then
+    if [[ -n $NO_REGISTRATOR ]]; then
       publish_to_etcd
     fi
     sleep $(($TTL/2)) # sleep for half the TTL

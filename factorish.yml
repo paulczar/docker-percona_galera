@@ -40,7 +40,6 @@ factorish:
         - "-p 4444:4444 -e SERVICE_4444_NAME=database_sst"
         - "-p 4567:4567 -e SERVICE_4567_NAME=database_mon"
         - "-p 4568:4568 -e SERVICE_4568_NAME=database_ssi"
-#        - "-e REGISTRATOR=1"
         - "-e CLUSTER=database"
       dockerfile: /home/core/share/database
       command: /app/bin/boot
@@ -52,6 +51,5 @@ factorish:
         - "-e SERVICE_NAME=maxscale"
         - "-p 4008:4008 -e SERVICE_4008_NAME=lb_read"
         - "-p 4006:4006 -e SERVICE_4006_NAME=lb_rw"
-#        - "-e REGISTRATOR=1"
       dockerfile: /home/core/share/maxscale
       command: /app/bin/boot

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 function etcd_set_default {
-  etcdctl --no-sync -C $ETCD mk $ETCD_PATH/$1 $2 >/dev/null 2>&1 || true
+  etcdctl --no-sync -C $ETCD mk /$1 $2 >/dev/null 2>&1 || true
 }
 
 function etcd_make_directory {
-  etcdctl --no-sync -C $ETCD setdir $ETCD_PATH/$1 >/dev/null 2>&1 || true
+  etcdctl --no-sync -C $ETCD setdir /$1 >/dev/null 2>&1 || true
 }
 
 function on_exit() {
@@ -15,35 +15,25 @@ function on_exit() {
 }
 
 function cluster_members() {
-    CLUSTER_MEMBERS=
-    LIST=
-  if [[ -n $REGISTRATOR ]]; then
-    for server in $(cat /app/cluster_members.txt); do
-      echo -n "-----> Testing potential db host $server..."
-      if echo "" | nc $server 3306 | grep mysql_native_password > /dev/null; then
-        echo "OK"
-        LIST+="$server,"
-      else
-        echo "NOPE"
-      fi
-    done
-  else
-    for key in $(etcdctl --no-sync -C $ETCD ls $ETCD_PATH/cluster/mysqlNodes); do
-      value=$(etcdctl --no-sync -C $ETCD get $key)
-      server=$(basename $value | awk -F':' '{print $1}')
+  CLUSTER_MEMBERS=
+  LIST=
+  for server in $(cat /app/cluster_members.txt); do
+    echo -n "-----> Testing potential db host $server..."
+    if echo "" | nc $server 3306 | grep mysql_native_password > /dev/null; then
+      echo "OK"
       LIST+="$server,"
-    done
-  fi
+    else
+      echo "NOPE"
+    fi
+  done
   CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
 }
 
 function publish_to_etcd() {
-  if [[ -z $CLUSTER ]]; then
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/host $HOST --ttl $TTL >/dev/null
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/port $PUBLISH --ttl $TTL >/dev/null
-  else
-    etcdctl $ETCD_OPTIONS set $ETCD_PATH/cluster/mysqlNodes/$HOSTNAME $HOST:$PUBLISH --ttl $TTL >/dev/null
-  fi
+  etcdctl $ETCD_OPTIONS set /services/database_port/$HOSTNAME:factorish-database:3306 $HOST:3306 > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_ssi/$HOSTNAME:factorish-database:4568 $HOST:4568 > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_sst/$HOSTNAME:factorish-database:4444 $HOST:4444 > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_mon/$HOSTNAME:factorish-database:4567 $HOST:4567 > /dev/null
 }
 
 function init_database() {

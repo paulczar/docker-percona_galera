@@ -3,7 +3,9 @@ Percona/Galera Docker Image
 
 This docker project contains two Docker images, the first contains Percona with the galera extentions and XtraBackup installed, the second contains the mysql loadbalancer `maxscale`
 
-This is a preview release which now uses registrator to handle all service registration and uses confd to do configuration.  This should make it simple to implement against Consul and other SD tools in the future.
+By default it now uses registrator to handle all service registration and uses confd to do configuration.  This should make it simple to implement against Consul and other SD tools in the future.
+
+If you do not want to run registrator you can set `-e NO_REGISTRATOR=1` in the docker run command and the container will interact directly with etcd instead.
 
 CoreOS
 ======
