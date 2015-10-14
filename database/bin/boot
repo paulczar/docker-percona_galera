@@ -19,11 +19,11 @@ export MYSQL_USER=${MYSQL_USER:-admin}
 export MYSQL_PASS=${MYSQL_PASS:-admin}
 export REP_USER=${REP_USER:-replicator}
 export REP_PASS=${REP_PASS:-replicator}
-export PUBLISH=${PUBLISH:-3306}
-export PORT=${PUBLISH:-3306}
 export PROTO=${PROTO:-tcp}
 export ETCD_HOST=${ETCD_HOST:-$HOST}
 export NO_REGISTRATOR=${NO_REGISTRATOR:-}
+
+
 
 rm /var/log/mysql/error.log
 ln -s /dev/stdout /var/log/mysql/error.log
@@ -97,27 +97,24 @@ CONFD_PID=$!
 # wait for the service to become available
 echo "==> sleeping for 5 seconds, then testing if DB is up."
 sleep 5
-while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+while [[ -z $(ss -l -n -t | grep :3306) ]] ; do sleep 1; done
 
 echo "==> database running..."
 
-# publish the service to etcd using the injected HOST and PORT
-if [[ -n $PUBLISH ]]; then
-  set +e
-  # wait for the service to become available on PUBLISH port
-  sleep 1 && while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+# publish the service to etcd using the MySQL port
+set +e
+# wait for the service to become available on MySQL port
+sleep 1 && while [[ -z $(ss -l -n -t | grep :3306) ]] ; do sleep 1; done
 
-  # while the port is listening, publish to etcd
-  while [[ ! -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do
-    if [[ -n $NO_REGISTRATOR ]]; then
-      publish_to_etcd
-    fi
-    sleep $(($TTL/2)) # sleep for half the TTL
-  done
+# while the port is listening, publish to etcd
+while [[ ! -z $(ss -l -n -t | grep :3306) ]] ; do
+  if [[ -n $NO_REGISTRATOR ]]; then
+    publish_to_etcd
+  fi
+  sleep $(($TTL/2)) # sleep for half the TTL
+done
 
-  # if the loop quits, something went wrong
-  exit 1
-
-fi
+# if the loop quits, something went wrong
+exit 1
 
 wait

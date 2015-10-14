@@ -50,7 +50,7 @@ function init_database() {
   mysqld_safe --skip-syslog &
   echo "-----> sleeping for 5 seconds, then testing if DB is up"
   sleep 5
-  while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
+  while [[ -z $(ss -l -n -t | grep :3306) ]] ; do sleep 1; done
   mysql_creds
   echo "==> stopping mysql after setting up passwords"
   mysqladmin shutdown

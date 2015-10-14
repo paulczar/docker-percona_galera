@@ -3,36 +3,31 @@
 # Author: Paul Czarkowski
 # Date: 08/16/2014
 
-FROM ubuntu:trusty
+FROM debian:jessie
 MAINTAINER Paul Czarkowski "paul@paulcz.net"
 
-ENV PERCONA_VERSION=5.6 ETCD_VERSION=2.2.0 CONFD_VERSION=0.10.0
+ENV PERCONA_VERSION=5.6 ETCD_VERSION=2.2.0 CONFD_VERSION=0.10.0 DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /tmp
 
 # Base Deps
 RUN \
-  apt-get update && apt-get install -yq \
-  make \
+  apt-key adv --keyserver keys.gnupg.net --recv-keys 1C4CBDCDCD2EFD2A && \
+  echo "deb http://repo.percona.com/apt jessie main" > /etc/apt/sources.list.d/percona.list && \
+  echo "deb-src http://repo.percona.com/apt jessie main" >> /etc/apt/sources.list.d/percona.list && \
+  ln -fs /bin/true /usr/bin/chfn && \
+  apt-get -yqq update && \
+  apt-get install -yqq \
   ca-certificates \
-  net-tools \
-  sudo \
   curl \
-  vim \
-  strace \
-  lsof \
-  netcat \
-  lsb-release \
+  vim-tiny \
   locales \
-  socat \
+  percona-xtradb-cluster-client-${PERCONA_VERSION} \
+  percona-xtradb-cluster-server-${PERCONA_VERSION}  \
+  percona-xtrabackup \
+  percona-xtradb-cluster-garbd-3.x \
   --no-install-recommends && \
   locale-gen en_US.UTF-8 && \
-  apt-key adv --keyserver keys.gnupg.net --recv-keys 1C4CBDCDCD2EFD2A && \
-  echo "deb http://repo.percona.com/apt `lsb_release -cs` main" > /etc/apt/sources.list.d/percona.list && \
-  echo "deb-src http://repo.percona.com/apt `lsb_release -cs` main" >> /etc/apt/sources.list.d/percona.list && \
-  ln -fs /bin/true /usr/bin/chfn && \
-  apt-get update && \
-  DEBIAN_FRONTEND=noninteractive apt-get install -y percona-xtradb-cluster-client-${PERCONA_VERSION} percona-xtradb-cluster-server-${PERCONA_VERSION}  percona-xtrabackup rsync percona-xtradb-cluster-garbd-3.x && \
   rm -rf /var/lib/apt/lists/* && \
   sed -i 's/^\(bind-address\s.*\)/# \1/' /etc/mysql/my.cnf && \
   rm -rf /var/lib/mysql/*

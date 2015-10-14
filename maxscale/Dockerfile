@@ -3,35 +3,22 @@
 # Author: Paul Czarkowski
 # Date: 08/16/2014
 
-FROM ubuntu:trusty
+FROM debian:jessie
 MAINTAINER Paul Czarkowski "paul@paulcz.net"
 
 ENV MAXSCALE_VERSION=1.2.1 DEBIAN_FRONTEND=noninteractive ETCD_VERSION=2.2.0 CONFD_VERSION=0.10.0 MAXSCALE_HOME=/usr/local/skysql/maxscale
 
 # Base Deps
 RUN \
-  apt-get install -yqq software-properties-common && \
   apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 8167EE24 && \
-  echo "deb http://downloads.mariadb.com/enterprise/6whk-mygr/mariadb-maxscale/${MAXSCALE_VERSION}/ubuntu trusty main" > /etc/apt/sources.list.d/maxscale.list && \
+  echo "deb http://downloads.mariadb.com/enterprise/6whk-mygr/mariadb-maxscale/${MAXSCALE_VERSION}/debian jessie main" > /etc/apt/sources.list.d/maxscale.list && \
   apt-get update -yqq && apt-get install -yqq \
-  make \
   ca-certificates \
-  net-tools \
-  sudo \
   curl \
-  vim \
-  strace \
-  lsof \
-  netcat \
-  lsb-release \
-  locales \
-  socat \
-  mysql-client \
+  vim-tiny \
   maxscale \
   --no-install-recommends && \
-  locale-gen en_US.UTF-8 && \
-  rm -rf /var/lib/apt/lists/* && \
-  mkdir /etc/MaxScale
+  rm -rf /var/lib/apt/lists/*
 
 # download latest stable etcdctl
 RUN \

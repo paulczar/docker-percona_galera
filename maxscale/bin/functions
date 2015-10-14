@@ -19,35 +19,6 @@ function publish_to_etcd() {
   etcdctl $ETCD_OPTIONS set /services/lb_read/$HOSTNAME:factorish-maxscale:4008 $HOST:4008 > /dev/null
 }
 
-function init_database() {
-  chown -R mysql:mysql /var/lib/mysql
-  if [[ ! -d /var/lib/mysql/mysql ]]; then
-    echo "==> An empty or uninitialized database is detected in /var/lib/mysql"
-    echo "-----> Creating database..."
-    mysql_install_db > /dev/null 2>&1
-    echo "-----> Done!"
-  else
-    echo "-----> Using an existing database"
-  fi
-  echo "==> starting mysql in order to set up passwords"
-  mysqld_safe --skip-syslog --verbose &
-  echo "-----> sleeping for 5 seconds, then testing if DB is up"
-  sleep 5
-  while [[ -z $(netstat -lnt | awk "\$6 == \"LISTEN\" && \$4 ~ \".$PUBLISH\" && \$1 ~ \"$PROTO.?\"") ]] ; do sleep 1; done
-  [[ -z $HOST ]] && mysql_creds || /app/bin/database_creds
-  echo "==> stopping mysql after setting up passwords"
-  mysqladmin shutdown
-}
-
-function mysql_creds() {
-  mysql -e "SET wsrep_on=OFF; GRANT select ON *.* TO 'haproxy_check'@'%'"
-  mysql -e "SET wsrep_on=OFF; GRANT ALL ON *.* TO '$REP_USER'@'%' IDENTIFIED BY '$REP_PASS';"
-  mysql -e "SET wsrep_on=OFF; GRANT ALL ON *.* TO '$REP_USER'@'localhost' IDENTIFIED BY '$REP_PASS';"
-  mysql -e "SET wsrep_on=OFF; GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASS';"
-  mysql -e "SET wsrep_on=OFF; GRANT SUPER ON *.* TO '$MYSQL_USER'@'%' WITH GRANT OPTION;"
-  mysql -e 'FLUSH PRIVILEGES;'
-}
-
 function configure_etcd() {
   export ETCD_PORT=${ETCD_PORT:-4001}
   export ETCD="$ETCD_HOST:$ETCD_PORT"
