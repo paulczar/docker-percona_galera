@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# This script is designed to be run inside the container
+#
+
+# set debug based on envvar
+[[ -n $DEBUG ]] && set -x
+
+# wait for the service to become available
+while [[ -z $(ss -l -n -t | grep :3306) ]] ; do sleep 1; done
+
+# while the port is listening, publish to etcd
+while [[ ! -z $(ss -l -n -t | grep :3306) ]] ; do
+  if [[ -n $NO_REGISTRATOR ]]; then
+    publish_to_etcd
+  fi
+  sleep $(($TTL/2)) # sleep for half the TTL
+done
+
+kill 1

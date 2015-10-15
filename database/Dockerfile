@@ -22,6 +22,7 @@ RUN \
   curl \
   vim-tiny \
   locales \
+  runit \
   percona-xtradb-cluster-client-${PERCONA_VERSION} \
   percona-xtradb-cluster-server-${PERCONA_VERSION}  \
   percona-xtrabackup \

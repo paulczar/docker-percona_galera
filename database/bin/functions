@@ -8,12 +8,6 @@ function etcd_make_directory {
   etcdctl --no-sync -C $ETCD setdir /$1 >/dev/null 2>&1 || true
 }
 
-function on_exit() {
-    kill -TERM $SERVICE_PID
-    wait $SERVICE_PID 2>/dev/null
-    exit 0
-}
-
 function cluster_members() {
   CLUSTER_MEMBERS=
   LIST=
@@ -26,7 +20,7 @@ function cluster_members() {
       echo "NOPE"
     fi
   done
-  CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
+  export CLUSTER_MEMBERS=$(echo $LIST | sed 's/,$//')
 }
 
 function publish_to_etcd() {
@@ -47,10 +41,9 @@ function init_database() {
     echo "-----> Using an existing database"
   fi
   echo "==> starting mysql in order to set up passwords"
-  mysqld_safe --skip-syslog &
-  echo "-----> sleeping for 5 seconds, then testing if DB is up"
-  sleep 5
-  while [[ -z $(ss -l -n -t | grep :3306) ]] ; do sleep 1; done
+  mysqld_safe --skip-syslog --skip-networking > /dev/null &
+  echo "-----> testing if DB is up"
+  while [[ ! -e /var/run/mysqld/mysqld.sock ]] ; do sleep 1; done
   mysql_creds
   echo "==> stopping mysql after setting up passwords"
   mysqladmin shutdown
@@ -84,6 +77,6 @@ function configure_registrator() {
   export TTL=${TTL:-10}
   export ETCD_PORT=${ETCD_PORT:-4001}
   export ETCD="$ETCD_HOST:$ETCD_PORT"
-  echo "==> Sleep $(($TTL+1)) seconds to let old services expire"
+  echo "==> Sleep $(($TTL+1)) seconds to let old registrator services expire"
   sleep $(($TTL+1))
 }
