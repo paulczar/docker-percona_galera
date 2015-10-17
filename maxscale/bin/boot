@@ -33,6 +33,11 @@ else
   configure_registrator
 fi
 
+# prepare runit
+mkdir -p /etc/service/maxscale
+mkdir -p /etc/service/reloadmaxscale
+mkdir -p /etc/service/healthcheck
+mkdir -p /etc/service/confd
 
 # wait for confd to run once and install initial templates
 until confd -onetime -node $ETCD -config-file /app/confd.toml; do
@@ -40,47 +45,16 @@ until confd -onetime -node $ETCD -config-file /app/confd.toml; do
   sleep $(($TTL/2))  # sleep for half the TTL
 done
 
-echo Starting MaxScale
-
-maxscale -d -f /etc/maxscale.cnf --syslog=no --log=file --logdir=/var/log &
-
-SERVICE_PID=$!
-
-echo $SERVICE_PID > /app/maxscale.pid
-
-sleep 1
-
+echo "==> Starting MaxScale"
+maxscale --config /etc/maxscale.cnf --syslog=no --maxscalelog=no
+while ! ss -l -n -t | grep :6603 > /dev/null; do sleep 1; echo -n .; done
+echo "-----> reloading db users"
 maxadmin -pmariadb reload dbusers "Read Connection Router"
 maxadmin -pmariadb reload dbusers "RW Split Router"
+echo "==> Shutting down MaxScale"
+maxadmin -pmariadb shutdown maxscale
+while ss -l -n -t | grep :6603 > /dev/null; do sleep 1; echo -n .; done
 
-# smart shutdown on SIGINT and SIGTERM
-trap on_exit INT TERM
-
-# spawn confd in the background to update services based on etcd changes
-confd -node $ETCD -config-file /app/confd.toml &
-CONFD_PID=$!
-
-# wait for the service to become available
-echo "==> sleeping for 5 seconds, then testing if maxscale is up."
-sleep 5
-while [[ -z $(ss -l -n -t | grep :4006) ]] ; do sleep 1; done
-
-echo "==> maxscale running..."
-
-# publish the service to etcd using the injected HOST and PORT
-set +e
-# wait for the service to become available on PUBLISH port
-sleep 1 && while [[ -z $(ss -l -n -t | grep :4006) ]] ; do sleep 1; done
-
-# while the port is listening, publish to etcd
-while [[ ! -z $(ss -l -n -t | grep :4006) ]] ; do
-  if [[ -n $NO_REGISTRATOR ]]; then
-    publish_to_etcd
-    sleep $(($TTL/2)) # sleep for half the TTL
-  fi
-done
-
-# if the loop quits, something went wrong
-exit 1
+exec /usr/bin/runsvdir -P /etc/service
 
 wait

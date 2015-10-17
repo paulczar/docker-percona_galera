@@ -17,6 +17,7 @@ RUN \
   curl \
   vim-tiny \
   maxscale \
+  runit \
   --no-install-recommends && \
   rm -rf /var/lib/apt/lists/*
 

@@ -1,129 +1,126 @@
-Percona/Galera Docker Image
-===========================
+# Auto Clustering/Replicating Percona Database
 
-This docker project contains two Docker images, the first contains Percona with the galera extentions and XtraBackup installed, the second contains the mysql loadbalancer `maxscale`
+This is a tech demo of a combination of the [factorish](https://github.com/factorish/factorish) toolset to create
+and run a Percona (mysql) Database image that when combined with 
+[etcd](https://coreos.com/etcd/) will 
+automatically cluster and replicate with itself.
 
-By default it now uses registrator to handle all service registration and uses confd to do configuration.  This should make it simple to implement against Consul and other SD tools in the future.
+## How does it work ?
 
-If you do not want to run registrator you can set `-e NO_REGISTRATOR=1` in the docker run command and the container will interact directly with etcd instead.
+There are two images in this project, the first contains Percona and the
+Galera replication tools, the second contains Maxscale (a MySQL load balancer).
 
-CoreOS
-======
+When run with access to a service discovery tool (`etcd` by default) it is 
+able discover other running databases and set up a replication relationship.
 
-This has been written with the `CoreOS` ecosystem in mind.  To see it how it is intended please use the included `Vagrantfile`.  see _Galera Cluster_ section below.
+By default it uses Glider Labs' 
+[registrator](http://github.com/gliderlabs/registrator) to perform the service 
+registry, but can access `etcd` directly if that is your preference.
 
-Fetching
-========
+Inside the container `runit` manages three processes:
+
+### confd
+
+Used to watch the `etcd` endpoint and rewrite config files with any changes.
+
+### healthcheck
+
+Watches availability of the application ( percona or maxscale ) and kills 
+runit (thus the container) when it fails.
+
+### percona / maxscale
+
+Runs the main process for the container,  either Percona or Maxscale 
+depending on which image is running.
+
+See [factorish](https://github.com/factorish/factorish) for a detailed description of the factorish toolset.
+
+## Tech Demo
+
+In order to demonstrate the clustering capabilties there is an included 
+`Vagrantfile` which when used will spin up a 3 node 
+[coreos](https://coreos.com) cluster 
+running a local [Docker Registry](https://www.docker.com/docker-registry) 
+and [Registrator](http://github.com/gliderlabs/registrator) images.
+
+If you want to run this outside of the tech demo see the `contrib/` directory
+and/or start the tech demo first and view the `/etc/profiles.d/functions.sh`
+file in any of the `coreos` nodes.
+
+The `registry` is hosted in a path mapped in from the host computer and
+therefore is shared amongst the `coreos` nodes.  This means that any
+images pushed to it from one host are immediately avaliable to all the
+other hosts.
+
+This allows for some intelligent image pulling/building to ensure that
+only a single node has to do the heavy lifting.  See the `user-data.erb`
+file for the scripts that allow this sharing of work.
+
+Both the `database` and `maxscale` images are built from scratch automatically and started as the `coreos` nodes come online.  Thanks to the `registry` they will survive a `vagrant destroy` which means subsequent `vagrant up` will be
+substantially faster.
+
+### Running
+
+In order to use the tech demo simply run the following:
 
     $ git clone https://github.com/paulczar/docker-percona_galera.git
     $ cd docker-percona_galera
-    $ git checkout use_registrator
-
-or
-
-    $ git pull paulczar/percona-galera:registrator
-    $ git pull paulczar/maxscale:registrator
-
-Building
-========
-
-    $ docker build -t paulczar/percona-galera .
-
-Running
-=======
-
-Just a database
----------------
-
-MySQL root user is available from localhost without a password.  a default user/pass pair of admin/admin is pulled in from environment variables which has root like perms.  set it to something sensible.
-
-	 $ docker run -d -e MYSQL_USER=admin -e MYSQL_PASS=lolznopass paulczar/percona-galera
-	  ==> $HOST not set.  booting mysql without clustering.
-	  ==> An empty or uninitialized database is detected in /var/lib/mysql
-    ==> Creating database...
-    ==> Done!
-    ==> starting mysql in order to set up passwords
-    ==> sleeping for 20 seconds, then testing if DB is up
-    140920 16:22:26 mysqld_safe Logging to '/var/log/mysql/error.log'.
-    140920 16:22:26 mysqld_safe Starting mysqld daemon with databases from /var/lib/mysql
-    140920 16:22:26 mysqld_safe Skipping wsrep-recover for empty datadir: /var/lib/mysql
-    140920 16:22:26 mysqld_safe Assigning 00000000-0000-0000-0000-000000000000:-1 to wsrep_start_position
-    ==> stopping mysql after setting up passwords
-    140920 16:22:47 mysqld_safe mysqld from pid file /var/run/mysqld/mysqld.pid ended
-    140920 16:22:48 mysqld_safe Logging to '/var/log/mysql/error.log'.
-    140920 16:22:48 mysqld_safe Starting mysqld daemon with databases from /var/lib/mysql
-    140920 16:22:48 mysqld_safe Skipping wsrep-recover for empty datadir: /var/lib/mysql
-    140920 16:22:48 mysqld_safe Assigning 00000000-0000-0000-0000-000000000000:-1 to wsrep_start_position
-
-Galera Cluster
---------------
-
-When etcd is available the container will check to see if there's an existing cluster, if so it will join it.  If not it will perform an election that will last for 5 minutes.  During that time the first server that can grab a lock becomes the leader and any other nodes will wait until that server is ready before starting.   If the leader fails to start the election is busted and all nodes will need to be destroyed until the 5 minutes passes.
-
-An example Vagrantfile is provided which will start a 3 node `CoreOS` cluster each node running a database with replication automatically set up as well as a `maxscale` load balancer.
-
     $ vagrant up
-    $ ssh coreos-01
-    $ watch docker ps
 
-At this point the coreos user-data is starting the database.  It has to be downloaded from the docker hub first, and this can take some time.   Eventually the container will start and you'll see this in the console:
+Once Vagrant has brought up your three nodes you want to log in and watch the progress of the build using one of the provided helper functions:
 
-    CONTAINER ID        IMAGE                            COMMAND             CREATED              STATUS              PORTS                                                                                            NAMES
-    912ad42a4d1a        paulczar/percona-galera:latest   "/app/bin/boot"     About a minute ago   Up About a minute   0.0.0.0:3306->3306/tcp, 0.0.0.0:4444->4444/tcp, 0.0.0.0:4567->4567/tcp, 0.0.0.0:4568->4568/tcp   database
+    $ vagrant ssh core-01
+    $ journal_database
 
-Next we can watch mysql starting by utilizing `journalctl`
+This make take a few minutes if its the first time you've run this and the images aren't cached in the registry.  If you get bored you can also check out `journal_registry` and `journal_registrator` and watch them get pulled down and run.  It is also possible a different host will be elected to do the build, in which case you'll see it show as waiting for that host before it proceeds.
 
-    $ journalctl -f -u database
-    Sep 20 18:54:36 core-01 sh[1489]: Starting MySQL for reals
-    Sep 20 18:54:36 core-01 sh[1489]: ==> Performing Election...
-    Sep 20 18:54:36 core-01 sh[1489]: -----> Hurruh I win!
-    Sep 20 18:54:36 core-01 sh[1489]: ==> sleeping for 20 seconds, then testing if DB is up.
-    Sep 20 18:54:36 core-01 sh[1489]: 140920 18:54:36 mysqld_safe Logging to '/var/lib/mysql/912ad42a4d1a.err'.
-    Sep 20 18:54:36 core-01 sh[1489]: 140920 18:54:36 mysqld_safe Starting mysqld daemon with databases from /var/lib/mysql
-    Sep 20 18:54:36 core-01 sh[1489]: 140920 18:54:36 mysqld_safe Skipping wsrep-recover for 82f9ad85-40f7-11e4-9f0d-1eed76224be8:0 pair
-    Sep 20 18:54:36 core-01 sh[1489]: 140920 18:54:36 mysqld_safe Assigning 82f9ad85-40f7-11e4-9f0d-1eed76224be8:0 to wsrep_start_position
-    Sep 20 18:54:56 core-01 sh[1489]: ==> database running...
+Once the database is online ( you'll see percona start and replication collect in the `journal_database` output ) you can connect to Maxscale via the helper function `mysql`:
 
-At this point we can actually console into the container by running `database` which is a function we inject in the user-data to use `nsenter` to get a shell inside the database container...
+    $ mysql
+    mysql> select @@hostname;
+    +--------------+
+    | @@hostname   |
+    +--------------+
+    | a7575fd684eb |
+    +--------------+
 
+_the maxscale LB can take a while to find the service to loadbalance, and can also sometimes just fail.  I haven't worked out why yet._
+
+or by connecting to the shell of the database container on the current host:
 
     $ database
-    root@e9682b05cf5e:/# mysql -e "show status like 'wsrep_cluster%'"
-    +--------------------------+--------------------------------------+
-    | Variable_name            | Value                                |
-    +--------------------------+--------------------------------------+
-    | wsrep_cluster_conf_id    | 3                                    |
-    | wsrep_cluster_size       | 3                                    |
-    | wsrep_cluster_state_uuid | 1b92a583-40f6-11e4-ad62-46aacd6cd67e |
-    | wsrep_cluster_status     | Primary                              |
-    +--------------------------+--------------------------------------+
+    root@ecfd272af45e:/app# mysql
+    mysql> select @@hostname;
+    +--------------+
+    | @@hostname   |
+    +--------------+
+    | ecfd272af45e |
+    +--------------+
 
-There are some hints that you need to pass via environment variables to make this magic happen.
-These are provided in the `database` unit in `user-data.erb`. Explore `user-data.erb`, `bin/boot`, and `bin/functions` to see how the sausage is made.
+_notice the returned hostname is not the same in both queries, this is because the first was loadbalanced to the database on a different container_
 
-### cluster hints
+### Helper functions
 
-These are the only madatory ones.  the rest default to sensible values.
+Each container started at boot has the following helper functions created 
+created in `/etc/profile.d/functions.sh` and autoloaded by the shell.
+(examples shown below for `database` container) 
 
-* HOST - set this to the Host IP that you want to publish as your endpoint.
-* ETCD_HOST - set if the etcd endpoint is different to the Host IP above.
+* `database` - get shell in container.
+* `kill_database` - kills the container, equivalent to `docker rm -f database`
+* `build_database` - rebuilds the image
+* `push_database` - pushs the image to registry
+* `log_database` - connect to the docker log stream for that container
+* `journal_database` - connect to the systemd journal for that container
 
+They become very useful when combined:
 
-GarbD
------
+    $ build_database && push_database
+    $ kill_database && run_database && log_database
 
-If you want to stick to a two node cluster you can start garbd to act as the arbiter.
+There is also the `mysql` function which will connect you via the local proxy to a percona server and a `cleanup` function which deletes the `/services`
+namespace in `etcd`
 
-    $ eval `cat /etc/environment`
-    $ /usr/bin/docker run --name database-garbd --rm -p 3306:3306 -p 4444:4444 -p 4567:4567 -p 4568:4568 -e PUBLISH=4567 -e HOST=$COREOS_PRIVATE_IPV4 -e CLUSTER=openstack paulczar/percona-galera:latest /app/bin/garbd
-
-Load Balancer
--------------
-
-You can use an external load balancer if you have one DB per host.  If you're getting fancy you can also run a local haproxy load balancer ( or multiples ) which will load balance ( round robin, nothing fancy ) database connections between your nodes
-
-    $ eval `cat /etc/environment`
-    $ /usr/bin/docker run --name database-loadbalancer --rm -p 4006:4006 -p 4008:4008  -e PUBLISH=4006 -e HOST=$COREOS_PRIVATE_IPV4 paulczar/maxscale:latest
+Finally in the git repo is a `clean_registry` script which when run on the host will remove all images from the registry filesystem which is useful if you want to do a full rebuild from scratch.
 
 
 Author(s)
@@ -135,6 +132,7 @@ License
 =====
 
 Copyright 2014 Paul Czarkowski
+Copyright 2015 Paul Czarkowski
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

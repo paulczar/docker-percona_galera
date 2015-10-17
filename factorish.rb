@@ -67,9 +67,7 @@ def write_user_data(num_instances)
   target = File.join(File.dirname(__FILE__), 'user-data')
   (1..$num_instances).each do |count|
     if count == 1
-      @election = '-l SERVICE_TAGS=leader -e BOOTSTRAP=1'
-    else
-      @election = '-l SERVICE_TAGS=follower'
+      @bootstrap = count
     end
     content = ERB.new File.new(template).read
     File.open("#{target}-#{count}", 'w') { |f| f.write(content.result(binding)) }

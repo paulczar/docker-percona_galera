@@ -22,6 +22,7 @@ export REP_PASS=${REP_PASS:-replicator}
 export PROTO=${PROTO:-tcp}
 export ETCD_HOST=${ETCD_HOST:-$HOST}
 export NO_REGISTRATOR=${NO_REGISTRATOR:-}
+export WSREP_OPTIONS="--wsrep_node_address=$HOST $DB_OPTIONS"
 
 if [[ -z $HOST ]]; then
   echo '==> $HOST not set.  booting mysql without clustering.'
@@ -33,10 +34,6 @@ fi
 
 if [[ -n $NO_REGISTRATOR ]]; then
   configure_etcd
-  etcd_make_directory services/database_port
-  etcd_make_directory services/database_sst
-  etcd_make_directory services/database_ssi
-  etcd_make_directory services/database_mon
 else
   configure_registrator
 fi
@@ -46,26 +43,22 @@ mkdir -p /etc/service/percona
 mkdir -p /etc/service/healthcheck
 mkdir -p /etc/service/confd
 
-# wait for confd to run once and install initial templates
-until confd -onetime -node $ETCD -config-file /app/confd.toml; do
-  echo "==> database: waiting for confd to write initial templates..."
-  sleep $(($TTL/2))  # sleep for half the TTL
-done
+# initialize confd
+init_confd
 
 # initialize data volume
 init_database
 
-export WSREP_OPTIONS="--wsrep_node_address=$HOST $DB_OPTIONS"
+# check to see if cluster is already active
 cluster_members
 
 echo "==> Starting MySQL"
-
-if [[ -z $CLUSTER_MEMBERS ]]; then
-  if [[ -n $BOOTSTRAP ]]; then
+if [[ -z $CLUSTER_MEMBERS ]]; then  # if cluster is empty
+  if [[ $BOOTSTRAP == "1" ]]; then # and bootstrap is set to 1
     echo "-----> Starting primary database."
     echo "mysqld_safe --wsrep-new-cluster $WSREP_OPTIONS" | tee /app/bin/mysql_boot
     exec /usr/bin/runsvdir -P /etc/service
-  else
+  else # not primary, therefore wait until primary is ready
     echo "-----> Waiting for primary database."
     until [[ ! -z $CLUSTER_MEMBERS ]]; do
       cluster_members
@@ -78,7 +71,7 @@ if [[ -z $CLUSTER_MEMBERS ]]; then
     echo "mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS" | tee /app/bin/mysql_boot
     exec /usr/bin/runsvdir -P /etc/service
   fi
-else
+else # if cluster is not empty, go ahead and start.
   echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
     echo "mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS" | tee /app/bin/mysql_boot
     exec /usr/bin/runsvdir -P /etc/service

@@ -30,6 +30,14 @@ function publish_to_etcd() {
   etcdctl $ETCD_OPTIONS set /services/database_mon/$HOSTNAME:factorish-database:4567 $HOST:4567 > /dev/null
 }
 
+function init_confd() {
+  # wait for confd to run once and install initial templates
+  until confd -onetime -node $ETCD -config-file /app/confd.toml; do
+    echo "==> database: waiting for confd to write initial templates..."
+    sleep $(($TTL/2))  # sleep for half the TTL
+  done
+}
+
 function init_database() {
   chown -R mysql:mysql /var/lib/mysql
   if [[ ! -d /var/lib/mysql/mysql ]]; then
@@ -71,6 +79,10 @@ function configure_etcd() {
   # wait until etcd has discarded potentially stale values
   echo "==> Sleep $(($TTL+1)) seconds to let old services expire"
   sleep $(($TTL+1))
+  etcd_make_directory services/database_port
+  etcd_make_directory services/database_sst
+  etcd_make_directory services/database_ssi
+  etcd_make_directory services/database_mon
 }
 
 function configure_registrator() {

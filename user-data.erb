@@ -70,26 +70,26 @@ coreos:
       command: start
 <% end %>
 <% @applications.each do |name,app| %>
-    - name: factorish-<%= name %>.service
+    - name: <%= name %>.service
       command: start
       content: |
         [Unit]
-        Description=Factorish <%= name %>
-        Requires=factorish-registry.service
-        After=factorish-registry.service
+        Description=<%= name %>
+        Requires=registry.service
+        After=registry.service
 
         [Service]
         EnvironmentFile=/etc/environment
         TimeoutStartSec=0
-        ExecStartPre=-/usr/bin/docker kill factorish-<%= name %>
-        ExecStartPre=-/usr/bin/docker rm factorish-<%= name %>
+        ExecStartPre=-/usr/bin/docker kill <%= name %>
+        ExecStartPre=-/usr/bin/docker rm <%= name %>
   <% if app.has_key?('dockerfile') && app['dockerfile'] %>
         ExecStartPre=-/run/factorish/build_image <%= app['dockerfile'] %> <%= app['repository'] %> <%= name %>
   <% else %>
         ExecStartPre=-/run/factorish/fetch_image <%= name %> <%= app['repository'] %>
   <% end %>
-        ExecStart=/bin/sh -c "/usr/bin/docker run --rm <%= app['docker_options'].join(' ') %> <%= @election %> --name factorish-<%= name %> <%= app['repository']%> <%= app['command'] %>"
-        ExecStop=/usr/bin/docker stop factorish-<%= name %>
+        ExecStart=/bin/sh -c "/usr/bin/docker run --rm <%= app['docker_options'].join(' ') %> -e BOOTSTRAP=<%= @bootstrap %> --name <%= name %> <%= app['repository']%> <%= app['command'] %>"
+        ExecStop=/usr/bin/docker stop <%= name %>
 <% end %>
 write_files:
   - path: /etc/systemd/system/docker.service.d/50-insecure-registry.conf
@@ -208,30 +208,34 @@ write_files:
 <% @applications.each do |name, app| %>
       function run_<%= name %>() {
         eval `cat /etc/environment | sed "s/^/export /"`
-        echo "Running factorish-<%= name %>"
-        docker run  -d <%= app['docker_options'].join(' ') %> <%= @election %> --name factorish-<%= name %> <%= app['repository']%> <%= app['command'] %>
+        echo "Running <%= name %>"
+        docker run  -d <%= app['docker_options'].join(' ') %> -e BOOTSTRAP=<%= @bootstrap %> --name <%= name %> <%= app['repository']%> <%= app['command'] %>
       }
       function kill_<%= name %>() {
-        /usr/bin/docker kill factorish-<%= name %>
-        /usr/bin/docker rm factorish-<%= name %>
+        /usr/bin/docker kill <%= name %>
+        /usr/bin/docker rm <%= name %>
       }
       function build_<%= name %>() {
         docker build -t <%= app['repository'] %> <%=app['dockerfile'] %>
       }
       function log_<%= name %>() {
-        docker logs -f factorish-<%= name %>
+        docker logs -f <%= name %>
       }
       function journal_<%= name %>() {
-        journalctl -f -u factorish-<%= name %>
+        journalctl -f -u <%= name %>
       }
       function push_<%= name %>() {
         docker tag -f <%= app['repository'] %> 127.0.0.1:5000/<%= app['repository'] %>
         docker push 127.0.0.1:5000/<%= app['repository'] %>
       }
       function <%= name %>() {
-        /usr/bin/docker exec -it factorish-<%= name %> bash
+        /usr/bin/docker exec -it <%= name %> bash
       }
 <% end %>
       function cleanup() {
         etcdctl rm --recursive /services
+      }
+      function mysql() {
+        eval `cat /etc/environment | sed 's/^/export /'`
+        docker run -ti database mysql -h $COREOS_PRIVATE_IPV4 -P 4008 -uadmin -padmin
       }

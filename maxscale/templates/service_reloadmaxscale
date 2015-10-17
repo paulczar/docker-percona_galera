@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+while :
+do
+  while ! ss -l -n -t | grep :6603 > /dev/null; do sleep 1; done
+  /app/bin/reload
+  sleep 300
+done

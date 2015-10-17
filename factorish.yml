@@ -30,7 +30,7 @@ factorish:
         - '-h $HOSTNAME'
       command: '-ttl 30 -ttl-refresh 20 etcd://$COREOS_PRIVATE_IPV4:4001/services'
     database:
-      repository: factorish/percona-galera
+      repository: database
       docker_options:
         - "-e ETCD_HOST=$COREOS_PRIVATE_IPV4"
         - "-e HOST=$COREOS_PRIVATE_IPV4"
@@ -44,7 +44,7 @@ factorish:
       dockerfile: /home/core/share/database
       command: /app/bin/boot
     maxscale:
-      repository: factorish/maxscale
+      repository: maxscale
       docker_options:
         - "-e ETCD_HOST=$COREOS_PRIVATE_IPV4"
         - "-e HOST=$COREOS_PRIVATE_IPV4"

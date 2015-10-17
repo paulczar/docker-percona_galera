@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if ss -l -n -t | grep :6603 > /dev/null; then
+  maxadmin -pmariadb reload config
+  maxadmin -pmariadb reload dbusers "Read Connection Router"
+  maxadmin -pmariadb reload dbusers "RW Split Router"
+fi

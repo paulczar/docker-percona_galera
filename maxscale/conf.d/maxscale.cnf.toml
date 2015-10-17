@@ -8,4 +8,4 @@ keys = [
   "/services/database_port"
 ]
 check_cmd = "/app/bin/check {{ .src }}"
-reload_cmd = "maxadmin -pmariadb reload config"
+reload_cmd = "/app/bin/reload"
