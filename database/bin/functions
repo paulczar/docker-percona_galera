@@ -52,6 +52,7 @@ function init_database() {
   mysqld_safe --skip-syslog --skip-networking > /dev/null &
   echo "-----> testing if DB is up"
   while [[ ! -e /var/run/mysqld/mysqld.sock ]] ; do sleep 1; done
+  while ! mysql -e 'select now()'; do sleep 1; done
   mysql_creds
   echo "==> stopping mysql after setting up passwords"
   mysqladmin shutdown
