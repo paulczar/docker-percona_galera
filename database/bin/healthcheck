@@ -6,6 +6,11 @@
 # set debug based on envvar
 [[ -n $DEBUG ]] && set -x
 
+DIR=$(dirname $0)
+
+# functions
+. $DIR/functions
+
 # wait for the service to become available
 while ! ss -l -n -t | grep :3306 > /dev/null; do sleep 1; done
 
