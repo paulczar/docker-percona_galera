@@ -24,10 +24,10 @@ function cluster_members() {
 }
 
 function publish_to_etcd() {
-  etcdctl $ETCD_OPTIONS set /services/database_port/$HOSTNAME:factorish-database:3306 $HOST:3306 > /dev/null
-  etcdctl $ETCD_OPTIONS set /services/database_ssi/$HOSTNAME:factorish-database:4568 $HOST:4568 > /dev/null
-  etcdctl $ETCD_OPTIONS set /services/database_sst/$HOSTNAME:factorish-database:4444 $HOST:4444 > /dev/null
-  etcdctl $ETCD_OPTIONS set /services/database_mon/$HOSTNAME:factorish-database:4567 $HOST:4567 > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_port/$HOSTNAME:factorish-database:3306 $HOST:3306 --ttl ${TTL} > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_ssi/$HOSTNAME:factorish-database:4568 $HOST:4568 --ttl ${TTL} > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_sst/$HOSTNAME:factorish-database:4444 $HOST:4444 --ttl ${TTL} > /dev/null
+  etcdctl $ETCD_OPTIONS set /services/database_mon/$HOSTNAME:factorish-database:4567 $HOST:4567 --ttl ${TTL} > /dev/null
 }
 
 function init_confd() {
