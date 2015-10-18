@@ -7,15 +7,15 @@
 #   threads=<number of threads>
 
 [maxscale]
-threads=1
+threads=2
 
-[MySQL Monitor]
-type=monitor
-module=mysqlmon
-servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},{{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
-user={{ getenv "MYSQL_USER" }}
-passwd={{ getenv "MYSQL_USER" }}
-monitor_interval=10000
+#[MySQL Monitor]
+#type=monitor
+#module=mysqlmon
+#servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},{{end}}{{ $arr := split $server ":" }}{{ index $arr 0 }}{{end}}
+#user={{ getenv "MYSQL_USER" }}
+#passwd={{ getenv "MYSQL_USER" }}
+#monitor_interval=10000
 #backend_connect_timeout=
 #backend_read_timeout=
 #backend_write_timeout=
@@ -46,18 +46,8 @@ servers={{range $index, $server := ls "/services/database_port/"}}{{if $index}},
 user={{ getenv "MYSQL_USER" }}
 passwd={{ getenv "MYSQL_USER" }}
 max_slave_connections=100%
-#use_sql_variables_in=master
+use_sql_variables_in=master
 #max_slave_replication_lag=21
-#filters=hint|fetch|qla
-#router_options=slave_selection_criteria=LEAST_CURRENT_OPERATIONS
-
-# Uncomment this to disable the saving of session modifying comments. Some scripting
-# languages use connection pooling and will use the same session. MaxScale sees them
-# as the same session and stores them for the slave recovery process.
-router_options=disable_sescmd_history=true,disable_slave_recovery=true
-
-# This will allow the master server to be used for read queries. By default
-# MaxScale will only use the master for write queries.
 router_options=master_accept_reads=true
 
 [Debug Interface]
