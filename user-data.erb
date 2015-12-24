@@ -3,17 +3,22 @@
 coreos:
   update:
     reboot-strategy: off
-  etcd:
+  etcd2:
       #generate a new token for each unique cluster from https://discovery.etcd.io/new
       <%= @etcd_discovery %>
       addr: $public_ipv4:4001
       peer-addr: $public_ipv4:7001
+      advertise-client-urls: http://$public_ipv4:2379
+      initial-advertise-peer-urls: http://$public_ipv4:2380
+      listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
+      listen-peer-urls: http://$public_ipv4:2380,http://$public_ipv4:7001
+      data-dir: /var/lib/etcd2
   units:
-<% if @flannel %>
-    - name: etcd.service
+    - name: etcd2.service
       command: start
     - name: fleet.service
       command: start
+<% if @flannel %>
     - name: flannel.service
       command: start
       content: |
@@ -63,11 +68,6 @@ coreos:
         ExecStart=/opt/bin/setup-network-environment
         RemainAfterExit=yes
         Type=oneshot
-<% else %>
-    - name: etcd.service
-      command: start
-    - name: fleet.service
-      command: start
 <% end %>
 <% @applications.each do |name,app| %>
     - name: <%= name %>.service

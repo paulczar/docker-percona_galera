@@ -23,18 +23,20 @@ export PROTO=${PROTO:-tcp}
 export ETCD_HOST=${ETCD_HOST:-$HOST}
 export NO_REGISTRATOR=${NO_REGISTRATOR:-}
 export WSREP_OPTIONS="--wsrep_node_address=$HOST $DB_OPTIONS"
+export CLUSTER=${CLUSTER:-"database"}
+export TTL=${TTL:-10}
+
+echo "==> Initialize"
+
 
 if [[ -z $HOST ]]; then
-  echo '==> $HOST not set.  booting mysql without clustering.'
-  init_database
-  echo "==> database running..."
-  mysqld_safe ${DB_OPTIONS}
-  exit $?
-fi
-
-if [[ -n $NO_REGISTRATOR ]]; then
+  echo "----> Using Environment variables for configuration"
+  configure_env
+elif [[ -n $NO_REGISTRATOR ]]; then
+  echo "----> Using ETCD directly for configuration"
   configure_etcd
 else
+  echo "----> Using registrator/etcd for configuration"
   configure_registrator
 fi
 

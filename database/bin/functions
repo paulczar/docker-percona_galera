@@ -32,7 +32,7 @@ function publish_to_etcd() {
 
 function init_confd() {
   # wait for confd to run once and install initial templates
-  until confd -onetime -node $ETCD -config-file /app/confd.toml; do
+  until confd -onetime ${CONFD_OPTIONS}; do
     echo "==> database: waiting for confd to write initial templates..."
     sleep $(($TTL/2))  # sleep for half the TTL
   done
@@ -70,8 +70,8 @@ function configure_etcd() {
   export ETCD_PORT=${ETCD_PORT:-4001}
   export ETCD="$ETCD_HOST:$ETCD_PORT"
   export ETCD_PATH=${ETCD_PATH:-/database}
-  export TTL=${TTL:-10}
   export ETCD_OPTIONS="--no-sync -C $ETCD"
+  export CONFD_OPTIONS="-node $ETCD -config-file /app/confd.toml -backend etcd"
   # wait for etcd to be available
   until etcdctl --no-sync -C $ETCD ls >/dev/null 2>&1; do
     echo "echo ==> waiting for etcd at $ETCD..."
@@ -87,9 +87,13 @@ function configure_etcd() {
 }
 
 function configure_registrator() {
-  export TTL=${TTL:-10}
   export ETCD_PORT=${ETCD_PORT:-4001}
   export ETCD="$ETCD_HOST:$ETCD_PORT"
+  export CONFD_OPTIONS="-node $ETCD -config-file /app/confd.toml -backend etcd"
   echo "==> Sleep $(($TTL+1)) seconds to let old registrator services expire"
   sleep $(($TTL+1))
+}
+
+function configure_env() {
+  export CONFD_OPTIONS="-config-file /app/confd.toml -backend env"
 }

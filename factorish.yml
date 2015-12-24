@@ -9,7 +9,7 @@ factorish:
   expose_ports:
     - 3306
   coreos:
-    channel: beta
+    channel: alpha
     min_version: 554
     flannel:
       enabled: False

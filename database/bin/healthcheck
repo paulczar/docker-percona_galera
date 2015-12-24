@@ -16,7 +16,7 @@ while ! ss -l -n -t | grep :3306 > /dev/null; do sleep 1; done
 
 # while the port is listening, publish to etcd
 while ss -l -n -t | grep :3306 > /dev/null; do
-  if [[ -n $NO_REGISTRATOR ]]; then
+  if [[ -n $NO_REGISTRATOR ]] && [[ -n $ETCD ]]; then
     publish_to_etcd
   fi
   sleep $(($TTL/2)) # sleep for half the TTL

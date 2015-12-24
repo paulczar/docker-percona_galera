@@ -59,7 +59,7 @@ def write_user_data(num_instances)
   if $num_instances == 1
     @etcd_discovery = '# single node no discovery needed.'
   else
-    @etcd_discovery = "discovery: #{Net::HTTP.get(URI.parse('http://discovery.etcd.io/new'))}"
+    @etcd_discovery = "discovery: #{Net::HTTP.get(URI.parse('http://discovery.etcd.io/new?size=1'))}"
   end
   @applications = SETTINGS['applications']
 

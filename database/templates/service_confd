@@ -2,4 +2,4 @@
 
 set -e
 
-exec confd -node $ETCD -config-file /app/confd.toml
+exec confd ${CONFD_OPTIONS}
