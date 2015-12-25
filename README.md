@@ -59,7 +59,7 @@ file for the scripts that allow this sharing of work.
 Both the `database` and `maxscale` images are built from scratch automatically and started as the `coreos` nodes come online.  Thanks to the `registry` they will survive a `vagrant destroy` which means subsequent `vagrant up` will be
 substantially faster.
 
-### Running
+### Running in CoreOS with etcd/registrator discovery
 
 In order to use the tech demo simply run the following:
 
@@ -122,6 +122,44 @@ namespace in `etcd`
 
 Finally in the git repo is a `clean_registry` script which when run on the host will remove all images from the registry filesystem which is useful if you want to do a full rebuild from scratch.
 
+## Running without service discovery:
+
+### Server 1
+
+change `HOST` to be the IP address of the server.
+
+```
+$ export HOST=172.17.8.101
+$ docker run --detach \
+  --name database01 \
+  -e BOOTSTRAP=1 -e DEBUG=1 \
+  -e MYSQL_PASS=password -e REP_PASS=replicate \
+  -e HOST=$HOST -e SERVICE_DISCOVERY=env \
+  -p $HOST:3306:3306 \
+  -p $HOST:4444:4444 \
+  -p $HOST:4567:4567 \
+  -p $HOST:4568:4568 \
+  paulczar/percona-galera
+```
+
+### Servers 2,3,etc
+
+change `HOST` to be the IP address of the server, change `CLUSTER_MEMBERS` to be the IP of the first server.
+
+```
+$ export HOST=172.17.8.102
+docker run -ti --rm \
+  --name database02 \
+  -e DEBUG=1 \
+  -e MYSQL_PASS=password -e REP_PASS=replicate \
+  -e CLUSTER_MEMBERS=172.17.8.101 \
+  -e HOST=$HOST -e SERVICE_DISCOVERY=env \
+  -p $HOST:3306:3306 \
+  -p $HOST:4444:4444 \
+  -p $HOST:4567:4567 \
+  -p $HOST:4568:4568 \
+  paulczar/percona-galera  bash
+```
 
 Author(s)
 ======

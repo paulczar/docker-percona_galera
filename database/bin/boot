@@ -24,15 +24,16 @@ export ETCD_HOST=${ETCD_HOST:-$HOST}
 export NO_REGISTRATOR=${NO_REGISTRATOR:-}
 export WSREP_OPTIONS="--wsrep_node_address=$HOST $DB_OPTIONS"
 export CLUSTER=${CLUSTER:-"database"}
+export SERVICE_DISCOVERY=${SERVICE_DISCOVERY:-"registrator"}
 export TTL=${TTL:-10}
 
 echo "==> Initialize"
 
 
-if [[ -z $HOST ]]; then
+if [[ $SERVICE_DISCOVERY == "env" ]]; then
   echo "----> Using Environment variables for configuration"
   configure_env
-elif [[ -n $NO_REGISTRATOR ]]; then
+elif [[ $SERVICE_DISCOVERY == "etcd"  ]]; then
   echo "----> Using ETCD directly for configuration"
   configure_etcd
 else
@@ -52,7 +53,9 @@ init_confd
 init_database
 
 # check to see if cluster is already active
-cluster_members
+if [[ -z $CLUSTER_MEMBERS ]]; then
+  cluster_members
+fi
 
 echo "==> Starting MySQL"
 if [[ -z $CLUSTER_MEMBERS ]]; then  # if cluster is empty
