@@ -161,6 +161,119 @@ docker run -ti --rm \
   paulczar/percona-galera  bash
 ```
 
+## Run in Rackspace's Carina Service:
+
+Signup for [carina](https://app.getcarina.com)  and create a 3 node cluster.  Download and source the carina config files and get the carina binary as well.
+
+_note this will leave the mysql and galera ports open to the whole of the service-net network_
+
+we need to get the servicenet IP address of each node:
+
+```
+$ docker info
+Containers: 7
+Images: 6
+Engine Version: 
+Role: primary
+Strategy: spread
+Filters: health, port, dependency, affinity, constraint
+Nodes: 3
+ bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n1: 172.99.65.11:42376
+  └ Containers: 3
+  └ Reserved CPUs: 0 / 12
+  └ Reserved Memory: 0 B / 4.2 GiB
+  └ Labels: executiondriver=native-0.2, kernelversion=3.18.21-1-rackos, operatingsystem=Debian GNU/Linux 7 (wheezy) (containerized), storagedriver=aufs
+ bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n2: 172.99.65.12:42376
+  └ Containers: 2
+  └ Reserved CPUs: 0 / 12
+  └ Reserved Memory: 0 B / 4.2 GiB
+  └ Labels: executiondriver=native-0.2, kernelversion=3.18.21-1-rackos, operatingsystem=Debian GNU/Linux 7 (wheezy) (containerized), storagedriver=aufs
+ bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n3: 172.99.65.13:42376
+  └ Containers: 2
+  └ Reserved CPUs: 0 / 12
+  └ Reserved Memory: 0 B / 4.2 GiB
+  └ Labels: executiondriver=native-0.2, kernelversion=3.18.21-1-rackos, operatingsystem=Debian GNU/Linux 7 (wheezy) (containerized), storagedriver=aufs
+CPUs: 36
+Total Memory: 12.6 GiB
+Name: a892be77e40c
+```
+
+for each node we need to  get the servicenet ip:
+
+```
+$ docker run --net=host \
+  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n1 \
+  racknet/ip service ipv4
+10.176.230.11
+  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n2 \
+  racknet/ip service ipv4
+10.176.230.12
+$ docker run --net=host \
+  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n3 \
+  racknet/ip service ipv4
+10.176.230.13
+```
+
+Start your first MySQL server:
+
+```
+$ docker run --detach \
+  --name database01 \
+  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n1 \
+  -e DEBUG=1 -e MYSQL_USER=admin \
+  -e MYSQL_PASS=notthispassword -e REP_PASS=woopdedoo \
+  -e HOST=10.176.230.11 -e SERVICE_DISCOVERY=env \
+  -p 10.176.230.11:3306:3306 \
+  -p 10.176.230.11:4444:4444 \
+  -p 10.176.230.11:4567:4567 \
+  -p 10.176.230.11:4568:4568 \
+  paulczar/percona-galera
+```
+
+Second and third:
+
+```
+$ docker run -d \
+  --name database02 \
+  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n2 \
+  -e MYSQL_USER=admin \
+  -e CLUSTER_MEMBERS=10.176.230.11 \
+  -e MYSQL_PASS=notthispassword -e REP_PASS=woopdedoo \
+  -e HOST=10.176.230.12 -e SERVICE_DISCOVERY=env \
+  -p 10.176.230.12:3306:3306 \
+  -p 10.176.230.12:4444:4444 \
+  -p 10.176.230.12:4567:4567 \
+  -p 10.176.230.12:4568:4568 \
+  paulczar/percona-galera
+
+$ docker run -d \
+  --name database03 \
+  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n3 \
+  -e MYSQL_USER=admin \
+  -e CLUSTER_MEMBERS=10.176.230.11 \
+  -e MYSQL_PASS=notthispassword -e REP_PASS=woopdedoo \
+  -e HOST=10.176.230.13 -e SERVICE_DISCOVERY=env \
+  -p 10.176.230.13:3306:3306 \
+  -p 10.176.230.13:4444:4444 \
+  -p 10.176.230.13:4567:4567 \
+  -p 10.176.230.13:4568:4568 \
+  paulczar/percona-galera  
+```
+
+wait a minute or so then check status:
+
+```
+docker exec -ti database01 mysql -e "SHOW STATUS LIKE 'wsrep_cluster%'"
++--------------------------+--------------------------------------+
+| Variable_name            | Value                                |
++--------------------------+--------------------------------------+
+| wsrep_cluster_conf_id    | 3                                    |
+| wsrep_cluster_size       | 3                                    |
+| wsrep_cluster_state_uuid | 2882bcb7-ab3b-11e5-ab75-2b510ef0ec6f |
+| wsrep_cluster_status     | Primary                              |
++--------------------------+--------------------------------------+
+```
+
 Author(s)
 ======
 
