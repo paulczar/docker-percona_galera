@@ -45,4 +45,6 @@ WORKDIR /app
 
 EXPOSE 4006 4008
 
+ENV SERVICE_4008_NAME=lb_read SERVICE_4006_NAME=lb_rw
+
 CMD /app/bin/boot
