@@ -21,11 +21,15 @@ export REP_USER=${REP_USER:-replicator}
 export REP_PASS=${REP_PASS:-replicator}
 export PROTO=${PROTO:-tcp}
 export ETCD_HOST=${ETCD_HOST:-$HOST}
+export ETCD_HOST=${ETCD_HOST:-127.0.0.1}
 export NO_REGISTRATOR=${NO_REGISTRATOR:-}
-export WSREP_OPTIONS="--wsrep_node_address=$HOST $DB_OPTIONS"
 export CLUSTER=${CLUSTER:-"database"}
 export SERVICE_DISCOVERY=${SERVICE_DISCOVERY:-"registrator"}
 export TTL=${TTL:-10}
+
+if [[ -n ${HOST} ]]; then
+  export WSREP_OPTIONS="--wsrep_node_address=${HOST}"
+fi
 
 echo "==> Initialize"
 
@@ -73,12 +77,12 @@ if [[ -z $CLUSTER_MEMBERS ]]; then  # if cluster is empty
     echo "-----> primary ready.  Starting."
     sleep 5
     echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
-    echo "mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS" | tee /app/bin/mysql_boot
+    echo "mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS $DB_OPTIONS" | tee /app/bin/mysql_boot
     exec /usr/bin/runsvdir -P /etc/service
   fi
 else # if cluster is not empty, go ahead and start.
   echo "-----> joining cluster with known members: $CLUSTER_MEMBERS"
-    echo "mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS" | tee /app/bin/mysql_boot
+    echo "mysqld_safe --wsrep_cluster_address=gcomm://$CLUSTER_MEMBERS $WSREP_OPTIONS $DB_OPTIONS" | tee /app/bin/mysql_boot
     exec /usr/bin/runsvdir -P /etc/service
 fi
 

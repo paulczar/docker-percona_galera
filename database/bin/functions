@@ -54,6 +54,12 @@ function init_database() {
   while [[ ! -e /var/run/mysqld/mysqld.sock ]] ; do sleep 1; done
   while ! mysql -e 'select now()'; do sleep 1; done
   mysql_creds
+
+  if [[ -n ${MYSQL_DATABASE} ]]; then
+    echo "-----> creating database: ${MYSQL_DATABASE}"
+    mysqladmin create ${MYSQL_DATABASE} || echo ${MYSQL_DATABASE} may already exist.
+  fi
+
   echo "==> stopping mysql after setting up passwords"
   mysqladmin shutdown
 }
