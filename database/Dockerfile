@@ -64,3 +64,6 @@ CMD ["/app/bin/boot"]
 
 # Expose ports.
 EXPOSE 3306 4444 4567 4568
+
+# Name ports for registrator
+ENV SERVICE_3306_NAME=database_port SERVICE_4444_NAME=database_sst SERVICE_4567_NAME=database_mon SERVICE_4568_NAME=database_ssi
