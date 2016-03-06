@@ -1,3 +1,5 @@
+require 'yaml'
+
 FACTORISH_SETTINGS = ENV['FACTORISH_SETTINGS'] || 'factorish.yml'
 
 SETTINGS = YAML.load_file(FACTORISH_SETTINGS)['factorish']
