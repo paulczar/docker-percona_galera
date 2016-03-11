@@ -1,8 +1,8 @@
 # Auto Clustering/Replicating Percona Database
 
 This is a tech demo of a combination of the [factorish](https://github.com/factorish/factorish) toolset to create
-and run a Percona (mysql) Database image that when combined with 
-[etcd](https://coreos.com/etcd/) will 
+and run a Percona (mysql) Database image that when combined with
+[etcd](https://coreos.com/etcd/) will
 automatically cluster and replicate with itself.
 
 ## How does it work ?
@@ -10,11 +10,11 @@ automatically cluster and replicate with itself.
 There are two images in this project, the first contains Percona and the
 Galera replication tools, the second contains Maxscale (a MySQL load balancer).
 
-When run with access to a service discovery tool (`etcd` by default) it is 
+When run with access to a service discovery tool (`etcd` by default) it is
 able discover other running databases and set up a replication relationship.
 
-By default it uses Glider Labs' 
-[registrator](http://github.com/gliderlabs/registrator) to perform the service 
+By default it uses Glider Labs'
+[registrator](http://github.com/gliderlabs/registrator) to perform the service
 registry, but can access `etcd` directly if that is your preference.
 
 Inside the container `runit` manages three processes:
@@ -25,22 +25,22 @@ Used to watch the `etcd` endpoint and rewrite config files with any changes.
 
 ### healthcheck
 
-Watches availability of the application ( percona or maxscale ) and kills 
+Watches availability of the application ( percona or maxscale ) and kills
 runit (thus the container) when it fails.
 
 ### percona / maxscale
 
-Runs the main process for the container,  either Percona or Maxscale 
+Runs the main process for the container,  either Percona or Maxscale
 depending on which image is running.
 
 See [factorish](https://github.com/factorish/factorish) for a detailed description of the factorish toolset.
 
 ## Tech Demo
 
-In order to demonstrate the clustering capabilties there is an included 
-`Vagrantfile` which when used will spin up a 3 node 
-[coreos](https://coreos.com) cluster 
-running a local [Docker Registry](https://www.docker.com/docker-registry) 
+In order to demonstrate the clustering capabilties there is an included
+`Vagrantfile` which when used will spin up a 3 node
+[coreos](https://coreos.com) cluster
+running a local [Docker Registry](https://www.docker.com/docker-registry)
 and [Registrator](http://github.com/gliderlabs/registrator) images.
 
 If you want to run this outside of the tech demo see the `contrib/` directory
@@ -101,9 +101,9 @@ _notice the returned hostname is not the same in both queries, this is because t
 
 ### Helper functions
 
-Each container started at boot has the following helper functions created 
+Each container started at boot has the following helper functions created
 created in `/etc/profile.d/functions.sh` and autoloaded by the shell.
-(examples shown below for `database` container) 
+(examples shown below for `database` container)
 
 * `database` - get shell in container.
 * `kill_database` - kills the container, equivalent to `docker rm -f database`
@@ -173,7 +173,7 @@ we need to get the servicenet IP address of each node:
 $ docker info
 Containers: 7
 Images: 6
-Engine Version: 
+Engine Version:
 Role: primary
 Strategy: spread
 Filters: health, port, dependency, affinity, constraint
@@ -201,16 +201,12 @@ Name: a892be77e40c
 for each node we need to  get the servicenet ip:
 
 ```
-$ docker run --net=host \
-  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n1 \
-  racknet/ip service ipv4
+$ NODES=$(docker info | grep Nodes | awk '{print $2}')
+$ for (( i=1; i<=$NODES; i++ )); do
+    docker run --rm --net=host --env constraint:node==*n$i racknet/ip service ipv4
+  done
 10.176.230.11
-  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n2 \
-  racknet/ip service ipv4
 10.176.230.12
-$ docker run --net=host \
-  --env constraint:node==bf76bea4-47ef-43ac-a7ae-67a6e6db15bf-n3 \
-  racknet/ip service ipv4
 10.176.230.13
 ```
 
