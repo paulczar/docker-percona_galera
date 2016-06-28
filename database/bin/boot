@@ -54,7 +54,9 @@ mkdir -p /etc/service/confd
 init_confd
 
 # initialize data volume
-init_database
+if [[ $BOOTSTRAP == "1" ]]; then
+  init_database
+fi
 
 # check to see if cluster is already active
 if [[ -z $CLUSTER_MEMBERS ]]; then
