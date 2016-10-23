@@ -12,6 +12,7 @@ WORKDIR /tmp
 
 # Base Deps
 RUN \
+  echo "Europe/Budapest" > /etc/timezone; dpkg-reconfigure -f noninteractive tzdata && \
   apt-key adv --keyserver keys.gnupg.net --recv-keys 8507EFA5 && \
   echo "deb http://repo.percona.com/apt jessie main" > /etc/apt/sources.list.d/percona.list && \
   echo "deb-src http://repo.percona.com/apt jessie main" >> /etc/apt/sources.list.d/percona.list && \
