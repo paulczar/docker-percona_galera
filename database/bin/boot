@@ -3,11 +3,16 @@
 # This script is designed to be run inside the container
 #
 
+
 # fail hard and fast even on pipelines
 set -eo pipefail
 
 # set debug based on envvar
 [[ -n $DEBUG ]] && set -x
+
+# update packages on every boot
+apt-get -yqq update && \
+apt-get dist-upgrade -y
 
 DIR=$(dirname $0)
 

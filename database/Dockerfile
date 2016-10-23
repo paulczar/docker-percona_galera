@@ -12,11 +12,12 @@ WORKDIR /tmp
 
 # Base Deps
 RUN \
-  apt-key adv --keyserver keys.gnupg.net --recv-keys 1C4CBDCDCD2EFD2A && \
+  apt-key adv --keyserver keys.gnupg.net --recv-keys 8507EFA5 && \
   echo "deb http://repo.percona.com/apt jessie main" > /etc/apt/sources.list.d/percona.list && \
   echo "deb-src http://repo.percona.com/apt jessie main" >> /etc/apt/sources.list.d/percona.list && \
   ln -fs /bin/true /usr/bin/chfn && \
   apt-get -yqq update && \
+  apt-get dist-upgrade -y && \
   apt-get install -yqq \
   ca-certificates \
   curl \
