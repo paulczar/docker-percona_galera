@@ -3,11 +3,16 @@
 # This script is designed to be run inside the container
 #
 
+
 # fail hard and fast even on pipelines
 set -eo pipefail
 
 # set debug based on envvar
 [[ -n $DEBUG ]] && set -x
+
+# update packages on every boot
+apt-get -yqq update && \
+apt-get dist-upgrade -y
 
 DIR=$(dirname $0)
 
@@ -54,7 +59,9 @@ mkdir -p /etc/service/confd
 init_confd
 
 # initialize data volume
-init_database
+if [[ $BOOTSTRAP == "1" ]]; then
+  init_database
+fi
 
 # check to see if cluster is already active
 if [[ -z $CLUSTER_MEMBERS ]]; then

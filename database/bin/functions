@@ -69,7 +69,7 @@ function mysql_creds() {
   mysql -e "SET wsrep_on=OFF; GRANT ALL ON *.* TO '$REP_USER'@'localhost' IDENTIFIED BY '$REP_PASS';"
   mysql -e "SET wsrep_on=OFF; GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASS';"
   mysql -e "SET wsrep_on=OFF; GRANT SUPER ON *.* TO '$MYSQL_USER'@'%' WITH GRANT OPTION;"
-  mysql -e 'FLUSH PRIVILEGES;'
+  mysql -e "SET wsrep_on=OFF; FLUSH PRIVILEGES;"
 }
 
 function configure_etcd() {
